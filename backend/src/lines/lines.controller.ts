@@ -12,7 +12,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @Controller('lines')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LinesController {
-  constructor(private readonly linesService: LinesService) {}
+  constructor(private readonly linesService: LinesService) { }
 
   @Post()
   @Roles(Role.admin, Role.ativador)
@@ -80,8 +80,11 @@ export class LinesController {
 
   @Get('activators-productivity')
   @Roles(Role.admin, Role.supervisor)
-  getActivatorsProductivity() {
-    return this.linesService.getActivatorsProductivity();
+  getActivatorsProductivity(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.linesService.getActivatorsProductivity(startDate, endDate);
   }
 
   @Get('allocation-stats')

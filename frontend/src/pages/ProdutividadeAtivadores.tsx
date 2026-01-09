@@ -1,8 +1,22 @@
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, TrendingUp, Phone, CheckCircle, XCircle, Calendar, Users, UserPlus, UserMinus } from "lucide-react";
+import {
+  Loader2,
+  Phone,
+  CheckCircle,
+  XCircle,
+  Calendar,
+  Users,
+  UserPlus,
+  UserMinus,
+  TrendingDown,
+  AlertTriangle,
+  Filter,
+  RefreshCw,
+  Search
+} from "lucide-react";
 import { linesService } from "@/services/api";
 import {
   Table,
@@ -13,24 +27,40 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-} from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  Legend,
+  LineChart,
+  Line,
+  AreaChart,
+  Area
+} from "recharts";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { format, parseISO, subDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+interface DailyHistory {
+  date: string;
+  created: number;
+  banned: number;
+}
 
 interface ActivatorProductivity {
   id: number;
   name: string;
   email: string;
-  totalLines: number;
-  activeLines: number;
-  bannedLines: number;
-  linesByMonth: Record<string, number>;
-  createdAt: string;
-  updatedAt: string; // Última atualização (pode indicar último login)
+  totalCreated: number;
+  totalBannedInRange: number;
+  currentlyActive: number;
+  peakBanDay: { date: string; created: number; banned: number } | null;
+  dailyHistory: DailyHistory[];
+  lastActivity: string;
 }
 
 interface AllocationStats {
@@ -47,45 +77,56 @@ export default function ProdutividadeAtivadores() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedActivator, setSelectedActivator] = useState<ActivatorProductivity | null>(null);
 
+  // Filtros de data
+  const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+
   useEffect(() => {
-    loadProductivity();
+    loadData();
   }, []);
 
-  const loadProductivity = async () => {
+  const loadData = async () => {
     setIsLoading(true);
     try {
       const [productivityData, statsData] = await Promise.all([
-        linesService.getActivatorsProductivity(),
+        linesService.getActivatorsProductivity(startDate, endDate),
         linesService.getAllocationStats(),
       ]);
       setProductivity(productivityData);
       setAllocationStats(statsData);
+
+      // Manter o mesmo ativador selecionado ou resetar se não existir mais
+      if (selectedActivator) {
+        const found = productivityData.find(p => p.id === selectedActivator.id);
+        setSelectedActivator(found || null);
+      } else if (productivityData.length > 0) {
+        setSelectedActivator(productivityData[0]);
+      }
     } catch (error) {
-      console.error("Erro ao carregar produtividade:", error);
+      console.error("Erro ao carregar dados:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const totalLines = productivity.reduce((sum, p) => sum + p.totalLines, 0);
-  const totalActive = productivity.reduce((sum, p) => sum + p.activeLines, 0);
-  const totalBanned = productivity.reduce((sum, p) => sum + p.bannedLines, 0);
+  const totalCreated = productivity.reduce((sum, p) => sum + p.totalCreated, 0);
+  const totalBannedInRange = productivity.reduce((sum, p) => sum + p.totalBannedInRange, 0);
+  const totalActive = productivity.reduce((sum, p) => sum + p.currentlyActive, 0);
 
-  // Preparar dados para gráfico mensal
-  const chartData = selectedActivator
-    ? Object.entries(selectedActivator.linesByMonth).map(([month, count]) => ({
-        month,
-        count,
-      }))
-    : [];
+  // Formatar dados do histórico para o gráfico
+  const getChartData = (data: DailyHistory[]) => {
+    return data.map(item => ({
+      ...item,
+      formattedDate: format(parseISO(item.date), 'dd/MM', { locale: ptBR }),
+    })).reverse(); // Inverter para ordem cronológica (esq -> dir)
+  };
 
-  if (isLoading) {
+  if (isLoading && productivity.length === 0) {
     return (
       <MainLayout>
-        <div className="h-full overflow-y-auto scrollbar-content">
-          <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <div className="flex flex-col items-center justify-center h-[80vh]">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground animate-pulse">Carregando métricas de ativadores...</p>
         </div>
       </MainLayout>
     );
@@ -93,248 +134,286 @@ export default function ProdutividadeAtivadores() {
 
   return (
     <MainLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Produtividade dos Ativadores</h1>
-          <p className="text-muted-foreground mt-2">
-            Acompanhe a quantidade de linhas criadas por cada ativador
-          </p>
-        </div>
-
-        {/* Cards de resumo - Produtividade */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total de Linhas</CardTitle>
-              <Phone className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalLines}</div>
-              <p className="text-xs text-muted-foreground">
-                Criadas por {productivity.length} ativador(es)
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Linhas Ativas</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{totalActive}</div>
-              <p className="text-xs text-muted-foreground">
-                {totalLines > 0 ? Math.round((totalActive / totalLines) * 100) : 0}% do total
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Linhas Banidas</CardTitle>
-              <XCircle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{totalBanned}</div>
-              <p className="text-xs text-muted-foreground">
-                {totalLines > 0 ? Math.round((totalBanned / totalLines) * 100) : 0}% do total
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Cards de alocação de operadores */}
-        {allocationStats && (
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Linhas com Operador</CardTitle>
-                <Users className="h-4 w-4 text-blue-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">{allocationStats.linesWithOperators}</div>
-                <p className="text-xs text-muted-foreground">
-                  {allocationStats.totalActiveLines > 0 
-                    ? Math.round((allocationStats.linesWithOperators / allocationStats.totalActiveLines) * 100) 
-                    : 0}% do total
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Linhas sem Operador</CardTitle>
-                <UserMinus className="h-4 w-4 text-orange-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">{allocationStats.linesWithoutOperators}</div>
-                <p className="text-xs text-muted-foreground">
-                  {allocationStats.totalActiveLines > 0 
-                    ? Math.round((allocationStats.linesWithoutOperators / allocationStats.totalActiveLines) * 100) 
-                    : 0}% do total
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Linhas com 1 Operador</CardTitle>
-                <UserPlus className="h-4 w-4 text-yellow-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">{allocationStats.linesWithOneOperator}</div>
-                <p className="text-xs text-muted-foreground">
-                  {allocationStats.linesWithOperators > 0 
-                    ? Math.round((allocationStats.linesWithOneOperator / allocationStats.linesWithOperators) * 100) 
-                    : 0}% das alocadas
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Linhas com 2 Operadores</CardTitle>
-                <Users className="h-4 w-4 text-purple-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-purple-600">{allocationStats.linesWithTwoOperators}</div>
-                <p className="text-xs text-muted-foreground">
-                  {allocationStats.linesWithOperators > 0 
-                    ? Math.round((allocationStats.linesWithTwoOperators / allocationStats.linesWithOperators) * 100) 
-                    : 0}% das alocadas
-                </p>
-              </CardContent>
-            </Card>
+      <div className="space-y-8 pb-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
+              Relatório de Ativadores
+            </h1>
+            <p className="text-muted-foreground mt-1 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-green-500" />
+              Monitoramento de eficiência e taxas de banimento
+            </p>
           </div>
-        )}
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Tabela de ativadores */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Ranking de Ativadores</CardTitle>
+          <div className="flex flex-wrap items-center gap-3 bg-card p-2 rounded-xl border shadow-sm">
+            <div className="flex items-center gap-2 px-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-40 h-9 border-none bg-transparent focus-visible:ring-0"
+              />
+              <span className="text-muted-foreground">até</span>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-40 h-9 border-none bg-transparent focus-visible:ring-0"
+              />
+            </div>
+            <Button onClick={loadData} size="sm" className="gap-2">
+              <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              Filtrar
+            </Button>
+          </div>
+        </div>
+
+        {/* Resumo Geral */}
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card className="overflow-hidden border-l-4 border-l-primary relative">
+            <div className="absolute top-0 right-0 p-3 opacity-10">
+              <Phone className="h-12 w-12" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Subidas no Período</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ativador</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Ativas</TableHead>
-                    <TableHead className="text-right">Banidas</TableHead>
-                    <TableHead className="text-right">Último Login</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {productivity.length === 0 ? (
+              <div className="text-3xl font-black">{totalCreated}</div>
+              <p className="text-xs text-muted-foreground mt-1 border-t pt-1">
+                Total de linhas criadas
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden border-l-4 border-l-red-500 relative">
+            <div className="absolute top-0 right-0 p-3 opacity-10">
+              <TrendingDown className="h-12 w-12 text-red-500" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Banimentos no Período</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-red-500">{totalBannedInRange}</div>
+              <p className="text-xs text-muted-foreground mt-1 border-t pt-1">
+                {totalCreated > 0 ? ((totalBannedInRange / totalCreated) * 100).toFixed(1) : 0}% de taxa de queda
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden border-l-4 border-l-green-500 relative">
+            <div className="absolute top-0 right-0 p-3 opacity-10">
+              <CheckCircle className="h-12 w-12 text-green-500" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Linhas Ativas Agora</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-green-500">{totalActive}</div>
+              <p className="text-xs text-muted-foreground mt-1 border-t pt-1">
+                Atualmente conectadas
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden border-l-4 border-l-blue-500 relative bg-blue-50/10">
+            <div className="absolute top-0 right-0 p-3 opacity-10">
+              <Users className="h-12 w-12 text-blue-500" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Média por Ativador</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-black text-blue-600">
+                {productivity.length > 0 ? (totalCreated / productivity.length).toFixed(1) : 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 border-t pt-1">
+                Linhas / Ativador
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Dashboards e Gráficos */}
+        <div className="grid gap-6 lg:grid-cols-12">
+
+          {/* Coluna da Esquerda: Ranking */}
+          <Card className="lg:col-span-5 shadow-lg border-muted/60">
+            <CardHeader className="border-b bg-muted/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl">Ranking de Produtividade</CardTitle>
+                  <CardDescription>Ativadores ordenados por volume</CardDescription>
+                </div>
+                <Badge variant="secondary" className="px-3 py-1 font-bold">TOP {productivity.length}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="max-h-[600px] overflow-y-auto scrollbar-thin">
+                <Table>
+                  <TableHeader className="bg-muted/30 sticky top-0 z-10">
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        Nenhum ativador encontrado
-                      </TableCell>
+                      <TableHead className="pl-6">Ativador</TableHead>
+                      <TableHead className="text-right">Criadas</TableHead>
+                      <TableHead className="text-right pr-6">Banidas</TableHead>
                     </TableRow>
-                  ) : (
-                    productivity.map((activator) => {
-                      const lastLoginDate = new Date(activator.updatedAt);
-                      const now = new Date();
-                      const diffMs = now.getTime() - lastLoginDate.getTime();
-                      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                      const diffMinutes = Math.floor(diffMs / (1000 * 60));
-                      
-                      let lastLoginText = '';
-                      if (diffMinutes < 60) {
-                        lastLoginText = `${diffMinutes} min atrás`;
-                      } else if (diffHours < 24) {
-                        lastLoginText = `${diffHours}h atrás`;
-                      } else if (diffDays === 1) {
-                        lastLoginText = 'Ontem';
-                      } else if (diffDays < 7) {
-                        lastLoginText = `${diffDays} dias atrás`;
-                      } else {
-                        lastLoginText = lastLoginDate.toLocaleDateString('pt-BR', { 
-                          day: '2-digit', 
-                          month: '2-digit', 
-                          year: 'numeric' 
-                        });
-                      }
-
-                      return (
-                        <TableRow
-                          key={activator.id}
-                          className={selectedActivator?.id === activator.id ? "bg-muted" : "cursor-pointer hover:bg-muted/50"}
-                          onClick={() => setSelectedActivator(activator)}
-                        >
-                          <TableCell>
+                  </TableHeader>
+                  <TableBody>
+                    {productivity.map((activator, idx) => (
+                      <TableRow
+                        key={activator.id}
+                        className={`cursor-pointer transition-colors ${selectedActivator?.id === activator.id ? 'bg-primary/10 border-l-4 border-l-primary' : 'hover:bg-muted/40'}`}
+                        onClick={() => setSelectedActivator(activator)}
+                      >
+                        <TableCell className="pl-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-mono text-muted-foreground w-4">{idx + 1}.</span>
                             <div>
-                              <div className="font-medium">{activator.name}</div>
-                              <div className="text-sm text-muted-foreground">{activator.email}</div>
+                              <div className="font-bold flex items-center gap-2">
+                                {activator.name}
+                                {idx === 0 && <Badge className="bg-amber-400 text-amber-900 border-none scale-75">MVP</Badge>}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{activator.email}</div>
                             </div>
-                          </TableCell>
-                          <TableCell className="text-right font-bold">{activator.totalLines}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                              {activator.activeLines}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                              {activator.bannedLines}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="text-sm text-muted-foreground">
-                              {lastLoginText}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-black text-lg">{activator.totalCreated}</TableCell>
+                        <TableCell className="text-right pr-6">
+                          <div className="flex flex-col items-end">
+                            <span className="font-bold text-red-500">{activator.totalBannedInRange}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {activator.totalCreated > 0 ? ((activator.totalBannedInRange / activator.totalCreated) * 100).toFixed(0) : 0}% queda
+                            </span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Gráfico mensal */}
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {selectedActivator
-                  ? `Linhas Criadas por Mês - ${selectedActivator.name}`
-                  : "Selecione um ativador para ver o gráfico"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {selectedActivator && chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="month"
-                      angle={-45}
-                      textAnchor="end"
-                      height={100}
-                      tick={{ fontSize: 12 }}
-                    />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : selectedActivator ? (
-                <div className="flex items-center justify-center h-64 text-muted-foreground">
-                  Nenhum dado disponível para este ativador
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-64 text-muted-foreground">
-                  <Calendar className="h-12 w-12 opacity-50" />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Coluna da Direita: Detalhamento do Ativador */}
+          <div className="lg:col-span-7 space-y-6">
+            {selectedActivator ? (
+              <>
+                <Card className="shadow-lg overflow-hidden">
+                  <div className="bg-primary/5 p-6 border-b flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-black text-xl">
+                        {selectedActivator.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black">{selectedActivator.name}</h2>
+                        <p className="text-muted-foreground text-sm">{selectedActivator.email}</p>
+                      </div>
+                    </div>
+                    {selectedActivator.peakBanDay && (
+                      <div className="bg-red-50 text-red-600 p-3 rounded-lg border border-red-100 flex items-center gap-3">
+                        <AlertTriangle className="h-5 w-5" />
+                        <div>
+                          <div className="text-[10px] font-bold uppercase opacity-70">Pico de Banimento</div>
+                          <div className="font-black">
+                            {format(parseISO(selectedActivator.peakBanDay.date), 'dd/MM')} — {selectedActivator.peakBanDay.banned} quedas
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <CardContent className="p-6">
+                    <div className="mb-6 flex items-center justify-between">
+                      <h3 className="font-bold text-lg flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-primary" />
+                        Histórico Diário (Período)
+                      </h3>
+                      <div className="flex items-center gap-4 text-xs font-bold">
+                        <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded-full bg-primary"></div> Criadas</div>
+                        <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded-full bg-red-400"></div> Banidas</div>
+                      </div>
+                    </div>
+
+                    <div className="h-[300px] w-full mt-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={getChartData(selectedActivator.dailyHistory)}>
+                          <defs>
+                            <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="colorBanned" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#f87171" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
+                          <XAxis
+                            dataKey="formattedDate"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                          />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '12px', border: '1px solid hsl(var(--border))', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="created"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={3}
+                            fillOpacity={1}
+                            fill="url(#colorCreated)"
+                            name="Criadas"
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="banned"
+                            stroke="#f87171"
+                            strokeWidth={3}
+                            fillOpacity={1}
+                            fill="url(#colorBanned)"
+                            name="Banidas"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="mt-8">
+                      <h4 className="font-bold text-sm text-muted-foreground uppercase mb-4 tracking-widest">Últimos Registros</h4>
+                      <div className="grid grid-cols-4 gap-4 text-center">
+                        {selectedActivator.dailyHistory.slice(0, 4).map(day => (
+                          <div key={day.date} className="p-3 bg-muted/30 rounded-xl border border-muted ring-offset-2 hover:ring-2 transition-all">
+                            <div className="text-[10px] uppercase font-black text-muted-foreground mb-1">{format(parseISO(day.date), 'EEE', { locale: ptBR })} {format(parseISO(day.date), 'dd/MM')}</div>
+                            <div className="flex justify-center items-end gap-1">
+                              <span className="text-xl font-black">{day.created}</span>
+                              <span className="text-[10px] text-green-600 pb-1 font-bold">up</span>
+                            </div>
+                            <div className="text-xs font-bold text-red-400">-{day.banned} quedas</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center border-2 border-dashed rounded-3xl p-12 text-center text-muted-foreground opacity-60">
+                <Search className="h-16 w-16 mb-4" />
+                <h3 className="text-xl font-bold">Resumo Individual</h3>
+                <p>Selecione um ativador no ranking para ver o detalhamento diário de picos e quedas.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </MainLayout>
   );
 }
+
 

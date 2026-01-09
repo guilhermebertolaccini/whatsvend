@@ -17,7 +17,7 @@ export class LinesService {
     private controlPanelService: ControlPanelService,
     private systemEventsService: SystemEventsService,
     private healthCheckCacheService: HealthCheckCacheService,
-  ) {}
+  ) { }
 
   async create(createLineDto: CreateLineDto, createdBy?: number) {
     console.log('📝 Dados recebidos no service:', JSON.stringify(createLineDto, null, 2));
@@ -304,15 +304,15 @@ export class LinesService {
   async findAll(filters?: any) {
     // Remover campos inválidos que não existem no schema
     const { search, lineStatus, ...validFilters } = filters || {};
-    
+
     // Construir where clause
     const where: any = { ...validFilters };
-    
+
     // Aplicar filtro de status se fornecido
     if (lineStatus) {
       where.lineStatus = lineStatus;
     }
-    
+
     // Se houver busca por texto, aplicar filtros
     if (search) {
       where.OR = [
@@ -381,7 +381,7 @@ export class LinesService {
 
     try {
       const instanceName = `line_${line.phone.replace(/\D/g, '')}`;
-      
+
       // Primeiro, verificar o status da conexão
       try {
         const connectionResponse = await axios.get(
@@ -394,7 +394,7 @@ export class LinesService {
         );
 
         console.log('Status da conexão:', connectionResponse.data);
-        
+
         // Se já está conectado, não precisa de QR Code
         if (connectionResponse.data?.state === 'open' || connectionResponse.data?.instance?.state === 'open') {
           return { qrcode: null, connected: true, message: 'Linha já está conectada' };
@@ -418,7 +418,7 @@ export class LinesService {
       // Normalizar a resposta para o formato esperado pelo frontend
       // A Evolution API pode retornar em diferentes formatos
       let qrcode = null;
-      
+
       if (response.data?.base64) {
         // Formato: { base64: "data:image/png;base64,..." }
         qrcode = response.data.base64;
@@ -433,27 +433,27 @@ export class LinesService {
         qrcode = response.data;
       } else if (response.data?.pairingCode) {
         // Pairing code para WhatsApp Web
-        return { 
-          qrcode: null, 
+        return {
+          qrcode: null,
           pairingCode: response.data.pairingCode,
-          message: 'Use o código de pareamento' 
+          message: 'Use o código de pareamento'
         };
       }
 
       if (!qrcode) {
         console.warn('Formato de resposta não reconhecido:', response.data);
         // Retornar os dados brutos para debug
-        return { 
-          qrcode: null, 
+        return {
+          qrcode: null,
           rawData: response.data,
-          message: 'QR Code não disponível no momento. Verifique se a instância está pronta.' 
+          message: 'QR Code não disponível no momento. Verifique se a instância está pronta.'
         };
       }
 
       return { qrcode };
     } catch (error) {
       console.error('Erro ao obter QR Code:', error.response?.data || error.message);
-      
+
       if (error.response?.status === 404) {
         throw new NotFoundException('Instância não encontrada na Evolution API. Tente recriar a linha.');
       }
@@ -489,7 +489,7 @@ export class LinesService {
       // Se está tentando voltar para Padrão/Null vindo de um segmento específico, já cairia no IF acima.
       // Aqui tratamos o caso de tentar setar Null/Padrão explicitamente (embora já devesse estar em null/padrão)
       const isNewDefaultOrNull = updateLineDto.segment === null || updateLineDto.segment === defaultSegment?.id;
-      
+
       // Se a linha já saiu do estado "Padrão/Null", ela nunca mais pode voltar para ele
       // (Isso é um reforço da lógica acima, garantindo que mesmo se currentLine.segment fosse algo estranho)
       if (!isCurrentDefaultOrNull && isNewDefaultOrNull) {
@@ -697,13 +697,13 @@ export class LinesService {
         // Aceitar linhas com menos de 2 operadores e que não tenham operadores de outro segmento
         let availableLine = availableLines.find(l => {
           if (l.operators.length >= 2) return false;
-          
+
           // Verificar se todos os operadores são do mesmo segmento do operador atual
           if (l.operators.length > 0 && operator.segment) {
             const allSameSegment = l.operators.every(lo => lo.user.segment === operator.segment);
             if (!allSameSegment) return false;
           }
-          
+
           return true;
         });
 
@@ -741,7 +741,7 @@ export class LinesService {
           // Vincular nova linha ao operador usando a tabela LineOperator
           await this.assignOperatorToLine(availableLine.id, operatorId);
           console.log(`✅ [handleBannedLine] Linha ${availableLine.phone} atribuída ao operador ${operator.name} (ID: ${operatorId})`);
-          
+
           // IMPORTANTE: Atualizar userLine das conversas ativas para a nova linha
           // Isso mantém as conversas vinculadas ao operador, mas usando a nova linha
           await this.prisma.conversation.updateMany({
@@ -755,12 +755,12 @@ export class LinesService {
             },
           });
           console.log(`🔄 [handleBannedLine] Conversas do operador ${operator.name} atualizadas para usar a nova linha ${availableLine.phone}`);
-          
+
           // NÃO notificar o operador - ele não precisa saber que a linha foi banida
           // As conversas continuam aparecendo normalmente
         } else {
           console.warn(`⚠️ [handleBannedLine] Nenhuma linha disponível para substituir a linha banida para o operador ${operator?.name || operatorId}`);
-          
+
           // Fechar conversas ativas do operador
           try {
             await this.prisma.conversation.updateMany({
@@ -777,13 +777,13 @@ export class LinesService {
           } catch (error) {
             console.error(`❌ [handleBannedLine] Erro ao fechar conversas:`, error);
           }
-          
+
           // Notificar operador via WebSocket
           try {
             const operatorSockets = Array.from(this.websocketGateway['connectedUsers']?.entries() || [])
               .filter(([_, socket]: [any, any]) => socket.data?.user?.id === operatorId)
               .map(([_, socket]: [any, any]) => socket);
-            
+
             for (const socket of operatorSockets) {
               socket.emit('line-lost', {
                 message: 'Sua linha foi removida e não há linha disponível no momento. Você será notificado quando uma nova linha for atribuída.',
@@ -792,7 +792,7 @@ export class LinesService {
           } catch (error) {
             console.error(`❌ [handleBannedLine] Erro ao notificar operador:`, error);
           }
-          
+
           // Log apenas - fila de espera não implementada no schema ainda
           console.log(`📋 [handleBannedLine] Operador ${operator?.name || operatorId} precisa de nova linha, mas nenhuma disponível no momento`);
         }
@@ -883,7 +883,7 @@ export class LinesService {
           operators: true,
         },
       });
-      
+
       // No modo compartilhado, não filtrar por quantidade de operadores
       if (!sharedLineMode) {
         availableLines = defaultLines.filter(l => l.operators.length < 2);
@@ -1023,7 +1023,7 @@ export class LinesService {
               userId: legacyOperator.id,
             },
           });
-          
+
           if (!existingLink) {
             await this.prisma.lineOperator.create({
               data: {
@@ -1033,11 +1033,11 @@ export class LinesService {
             });
             console.log(`✅ [LinesService] Operador legacy sincronizado na tabela LineOperator`);
           }
-          
+
           return legacyOperator.id;
         }
       }
-      
+
       return null;
     }
 
@@ -1058,7 +1058,7 @@ export class LinesService {
       // Se existe vínculo ativo, verificar se o operador está online
       if (activeBinding) {
         const boundOperator = onlineOperators.find(op => op.id === activeBinding.userId);
-        
+
         if (boundOperator) {
           console.log(`✅ [LinesService] Mensagem atribuída ao operador vinculado (vínculo ativo): ${activeBinding.userId}`);
           return activeBinding.userId;
@@ -1086,7 +1086,7 @@ export class LinesService {
 
       // Se já existe conversa ativa, atribuir ao mesmo operador e criar/atualizar vínculo
       let selectedOperatorId: number | null = null;
-      
+
       if (existingConversation && existingConversation.userId) {
         selectedOperatorId = existingConversation.userId;
         console.log(`✅ [LinesService] Mensagem atribuída ao operador existente: ${existingConversation.userId}`);
@@ -1140,7 +1140,7 @@ export class LinesService {
 
         console.log(`🔗 [LinesService] Vínculo criado/atualizado: contactPhone=${contactPhone}, lineId=${lineId}, userId=${selectedOperatorId}, expiresAt=${expiresAt.toISOString()}`);
       }
-      
+
       return selectedOperatorId;
     }, { isolationLevel: 'Serializable' });
   }
@@ -1187,13 +1187,13 @@ export class LinesService {
           // BLOQUEAR apenas status explicitamente desconectados ou conectando
           // Status 'unknown' é permitido (pode ser cache ou problema temporário da API)
           const isDisconnected = connectionStatus === 'close' ||
-                                connectionStatus === 'CLOSE' ||
-                                connectionStatus === 'disconnected' ||
-                                connectionStatus === 'DISCONNECTED' ||
-                                connectionStatus === 'closeTimeout';
+            connectionStatus === 'CLOSE' ||
+            connectionStatus === 'disconnected' ||
+            connectionStatus === 'DISCONNECTED' ||
+            connectionStatus === 'closeTimeout';
 
           const isConnecting = connectionStatus === 'connecting' ||
-                              connectionStatus === 'CONNECTING';
+            connectionStatus === 'CONNECTING';
 
           if (isDisconnected) {
             throw new BadRequestException(`Linha ${line.phone} está desconectada (${connectionStatus}). Não é possível vincular ao operador.`);
@@ -1264,8 +1264,8 @@ export class LinesService {
 
           // Se a linha tem segmento definido E não é "Padrão" E é diferente do operador, BLOQUEAR
           if (line.segment !== null &&
-              (!defaultSegment || line.segment !== defaultSegment.id) &&
-              line.segment !== newSegment) {
+            (!defaultSegment || line.segment !== defaultSegment.id) &&
+            line.segment !== newSegment) {
             throw new BadRequestException(
               `SEGURANÇA: Linha pertence ao segmento ${line.segment}, mas operador pertence ao segmento ${newSegment}. Não é possível vincular.`
             );
@@ -1342,8 +1342,8 @@ export class LinesService {
       // REGRA CRÍTICA: Se a linha é do segmento "Padrão" OU tem segmento null, atualizar para o segmento do operador
       // Isso garante que linhas "Padrão" se tornem permanentemente do segmento do primeiro operador vinculado
       const shouldUpdateSegment = operator.segment !== null &&
-                                  (line.segment === null ||
-                                   (defaultSegment && line.segment === defaultSegment.id));
+        (line.segment === null ||
+          (defaultSegment && line.segment === defaultSegment.id));
 
       if (shouldUpdateSegment) {
         await tx.linesStock.update({
@@ -1404,50 +1404,106 @@ export class LinesService {
     console.log(`✅ Operador ${userId} desvinculado da linha ${lineId}`);
   }
 
-  // Relatório de produtividade dos ativadores
-  async getActivatorsProductivity() {
+  // Relatório de produtividade dos ativadores com filtro de data e análise de picos
+  async getActivatorsProductivity(startDate?: string, endDate?: string) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+
+    // Se fornecido final do dia, ajustar para 23:59:59
+    if (end) {
+      end.setHours(23, 59, 59, 999);
+    }
+
+    // Buscar ativadores
     const activators = await this.prisma.user.findMany({
       where: {
         role: 'ativador',
       },
-      include: {
-        createdLines: {
-          select: {
-            id: true,
-            phone: true,
-            lineStatus: true,
-            createdAt: true,
-          },
-        },
-      },
     });
 
-    const productivity = activators.map(activator => {
-      const totalLines = activator.createdLines.length;
-      const activeLines = activator.createdLines.filter(l => l.lineStatus === 'active').length;
-      const bannedLines = activator.createdLines.filter(l => l.lineStatus === 'ban').length;
+    const report = await Promise.all(activators.map(async (activator) => {
+      // Filtro base para linhas criadas dentro do período (se houver)
+      const lineWhere: any = { createdBy: activator.id };
+      if (start) lineWhere.createdAt = { ...lineWhere.createdAt, gte: start };
+      if (end) lineWhere.createdAt = { ...lineWhere.createdAt, lte: end };
 
-      // Agrupar por mês
-      const linesByMonth = activator.createdLines.reduce((acc, line) => {
-        const month = new Date(line.createdAt).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-        acc[month] = (acc[month] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      // Buscar todas as linhas criadas pelo ativador no período
+      const createdLines = await this.prisma.linesStock.findMany({
+        where: lineWhere,
+        select: {
+          id: true,
+          phone: true,
+          lineStatus: true,
+          createdAt: true,
+        },
+      });
+
+      // Buscar eventos de banimento no sistema para ESSE ativador (ou relacionados a suas linhas) no período
+      // Usamos a tabela systemEvent para saber QUANDO a linha caiu, independente de quando foi criada
+      const eventWhere: any = {
+        type: 'line_banned',
+        module: 'lines',
+      };
+      if (start) eventWhere.createdAt = { ...eventWhere.createdAt, gte: start };
+      if (end) eventWhere.createdAt = { ...eventWhere.createdAt, lte: end };
+
+      // Buscar eventos de banimento
+      const banEvents = await (this.prisma as any).systemEvent.findMany({
+        where: eventWhere,
+      });
+
+      // Filtrar eventos que pertencem às linhas deste ativador
+      // (O dado da linha geralmente está no campo 'data' do evento como JSON)
+      const activatorBanEvents = banEvents.filter(event => {
+        try {
+          const eventData = JSON.parse(event.data || '{}');
+          return createdLines.some(line => line.id === eventData.lineId);
+        } catch (e) {
+          return false;
+        }
+      });
+
+      // Estatísticas diárias
+      const dailyStats: Record<string, { created: number; banned: number }> = {};
+
+      // Processar criações
+      createdLines.forEach(line => {
+        const day = line.createdAt.toISOString().split('T')[0];
+        if (!dailyStats[day]) dailyStats[day] = { created: 0, banned: 0 };
+        dailyStats[day].created++;
+      });
+
+      // Processar banimentos pelo timestamp do EVENTO (quando ocorreu o ban)
+      activatorBanEvents.forEach(event => {
+        const day = event.createdAt.toISOString().split('T')[0];
+        if (!dailyStats[day]) dailyStats[day] = { created: 0, banned: 0 };
+        dailyStats[day].banned++;
+      });
+
+      // Transformar dailyStats em array ordenado
+      const dailyHistory = Object.entries(dailyStats)
+        .map(([date, stats]) => ({ date, ...stats }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      // Encontrar pico de banimento
+      const peakBanDay = dailyHistory.length > 0
+        ? [...dailyHistory].sort((a, b) => b.banned - a.banned)[0]
+        : null;
 
       return {
         id: activator.id,
         name: activator.name,
         email: activator.email,
-        totalLines,
-        activeLines,
-        bannedLines,
-        linesByMonth,
-        createdAt: activator.createdAt,
-        updatedAt: activator.updatedAt, // Última atualização (pode indicar último login)
+        totalCreated: createdLines.length,
+        totalBannedInRange: activatorBanEvents.length,
+        currentlyActive: createdLines.filter(l => l.lineStatus === 'active').length,
+        peakBanDay,
+        dailyHistory,
+        lastActivity: activator.updatedAt,
       };
-    });
+    }));
 
-    return productivity.sort((a, b) => b.totalLines - a.totalLines); // Ordenar por total de linhas (maior primeiro)
+    return report.sort((a, b) => b.totalCreated - a.totalCreated);
   }
 
   /**

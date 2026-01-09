@@ -24,7 +24,7 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = getAuthToken();
-  
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
@@ -293,17 +293,22 @@ export const linesService = {
     return apiRequest('/lines/evolutions');
   },
 
-  getActivatorsProductivity: async (): Promise<Array<{
+  getActivatorsProductivity: async (startDate?: string, endDate?: string): Promise<Array<{
     id: number;
     name: string;
     email: string;
-    totalLines: number;
-    activeLines: number;
-    bannedLines: number;
-    linesByMonth: Record<string, number>;
-    createdAt: string;
+    totalCreated: number;
+    totalBannedInRange: number;
+    currentlyActive: number;
+    peakBanDay: { date: string; created: number; banned: number } | null;
+    dailyHistory: Array<{ date: string; created: number; banned: number }>;
+    lastActivity: string;
   }>> => {
-    return apiRequest('/lines/activators-productivity');
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/lines/activators-productivity${query}`);
   },
 
   getAllocationStats: async (): Promise<{
@@ -324,9 +329,9 @@ export const linesService = {
     return apiRequest<Line[]>(`/lines/available/${segment}`);
   },
 
-  getQrCode: async (id: number): Promise<{ 
-    qrcode: string | null; 
-    connected?: boolean; 
+  getQrCode: async (id: number): Promise<{
+    qrcode: string | null;
+    connected?: boolean;
     pairingCode?: string;
     message?: string;
   }> => {
@@ -992,11 +997,11 @@ const arrayToCSV = (data: any[]): string => {
   if (!data || data.length === 0) {
     return '';
   }
-  
+
   const headers = Object.keys(data[0]);
   const csvRows = [
     headers.join(','),
-    ...data.map(row => 
+    ...data.map(row =>
       headers.map(header => {
         const value = row[header];
         // Escapar valores com vírgulas ou aspas
@@ -1009,7 +1014,7 @@ const arrayToCSV = (data: any[]): string => {
       }).join(',')
     ),
   ];
-  
+
   // Adicionar BOM (Byte Order Mark) para UTF-8 para garantir encoding correto no Excel
   return '\ufeff' + csvRows.join('\n');
 };
@@ -1029,7 +1034,7 @@ export const reportsService = {
     if (params.onlyMovimentedLines !== undefined) queryParams.append('onlyMovimentedLines', params.onlyMovimentedLines.toString());
 
     const url = `${API_BASE_URL}/reports/${endpoint}?${queryParams.toString()}`;
-    
+
     const token = getAuthToken();
     const response = await fetch(url, {
       method: 'GET',
@@ -1047,7 +1052,7 @@ export const reportsService = {
     // Backend retorna JSON, precisamos converter para CSV
     const data = await response.json();
     const csvContent = arrayToCSV(Array.isArray(data) ? data : [data]);
-    
+
     return new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   },
 };
