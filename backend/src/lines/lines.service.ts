@@ -469,26 +469,32 @@ export class LinesService {
   async update(id: number, updateLineDto: UpdateLineDto) {
     const currentLine = await this.findOne(id);
 
-    // PROTEÇÃO: Segmento da linha NÃO pode ser alterado após vinculação
-    // Somente linhas com segmento null ou "Padrão" podem mudar de segmento
-    if (updateLineDto.segment !== undefined) {
+    // PROTEÇÃO: Segmento da linha NÃO pode ser alterado após definido
+    // Somente linhas com segmento null ou "Padrão" podem mudar de segmento (atribuição inicial)
+    if (updateLineDto.segment !== undefined && updateLineDto.segment !== currentLine.segment) {
       const defaultSegment = await this.prisma.segment.findUnique({
         where: { name: 'Padrão' },
       });
 
-      const isDefaultSegment = currentLine.segment === defaultSegment?.id;
-      const isNullSegment = currentLine.segment === null;
+      const isCurrentDefaultOrNull = currentLine.segment === null || currentLine.segment === defaultSegment?.id;
 
-      // Verificar se a linha já tem operadores vinculados
-      const hasOperators = await this.prisma.lineOperator.count({
-        where: { lineId: id },
-      });
-
-      if (hasOperators > 0 && !isNullSegment && !isDefaultSegment) {
-        // Linha já foi vinculada a um segmento e não pode ser alterada
+      if (!isCurrentDefaultOrNull) {
+        // Linha já tem um segmento específico definido e não pode ser alterada nem voltar a ser padrão
         throw new BadRequestException(
-          'Não é possível alterar o segmento de uma linha que já foi vinculada a operadores. ' +
-          'O segmento é definido automaticamente na primeira vinculação e não pode mais ser alterado.'
+          'Não é possível alterar o segmento de uma linha que já foi vinculada a um segmento específico. ' +
+          'Uma vez que a linha é vinculada a um segmento, ela permanece travada a ele permanentemente.'
+        );
+      }
+
+      // Se está tentando voltar para Padrão/Null vindo de um segmento específico, já cairia no IF acima.
+      // Aqui tratamos o caso de tentar setar Null/Padrão explicitamente (embora já devesse estar em null/padrão)
+      const isNewDefaultOrNull = updateLineDto.segment === null || updateLineDto.segment === defaultSegment?.id;
+      
+      // Se a linha já saiu do estado "Padrão/Null", ela nunca mais pode voltar para ele
+      // (Isso é um reforço da lógica acima, garantindo que mesmo se currentLine.segment fosse algo estranho)
+      if (!isCurrentDefaultOrNull && isNewDefaultOrNull) {
+        throw new BadRequestException(
+          'Não é possível retornar uma linha vinculada para o segmento Padrão ou deixá-la sem segmento.'
         );
       }
     }
