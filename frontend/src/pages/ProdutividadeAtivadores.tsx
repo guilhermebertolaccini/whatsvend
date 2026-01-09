@@ -110,15 +110,17 @@ export default function ProdutividadeAtivadores() {
     }
   };
 
-  const totalCreated = productivity.reduce((sum, p) => sum + p.totalCreated, 0);
-  const totalBannedInRange = productivity.reduce((sum, p) => sum + p.totalBannedInRange, 0);
-  const totalActive = productivity.reduce((sum, p) => sum + p.currentlyActive, 0);
+  const totalCreated = (productivity || []).reduce((sum, p) => sum + (p.totalCreated || 0), 0);
+  const totalBannedInRange = (productivity || []).reduce((sum, p) => sum + (p.totalBannedInRange || 0), 0);
+  const totalActive = (productivity || []).reduce((sum, p) => sum + (p.currentlyActive || 0), 0);
 
   // Formatar dados do histórico para o gráfico
-  const getChartData = (data: DailyHistory[]) => {
+  const getChartData = (data: DailyHistory[] = []) => {
+    if (!data || !Array.isArray(data)) return [];
+
     return data.map(item => ({
       ...item,
-      formattedDate: format(parseISO(item.date), 'dd/MM', { locale: ptBR }),
+      formattedDate: item.date ? format(parseISO(item.date), 'dd/MM', { locale: ptBR }) : '',
     })).reverse(); // Inverter para ordem cronológica (esq -> dir)
   };
 
@@ -261,7 +263,7 @@ export default function ProdutividadeAtivadores() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {productivity.map((activator, idx) => (
+                    {(productivity || []).map((activator, idx) => (
                       <TableRow
                         key={activator.id}
                         className={`cursor-pointer transition-colors ${selectedActivator?.id === activator.id ? 'bg-primary/10 border-l-4 border-l-primary' : 'hover:bg-muted/40'}`}
@@ -311,7 +313,7 @@ export default function ProdutividadeAtivadores() {
                         <p className="text-muted-foreground text-sm">{selectedActivator.email}</p>
                       </div>
                     </div>
-                    {selectedActivator.peakBanDay && (
+                    {selectedActivator.peakBanDay && selectedActivator.peakBanDay.date && (
                       <div className="bg-red-50 text-red-600 p-3 rounded-lg border border-red-100 flex items-center gap-3">
                         <AlertTriangle className="h-5 w-5" />
                         <div>
@@ -337,7 +339,7 @@ export default function ProdutividadeAtivadores() {
 
                     <div className="h-[300px] w-full mt-4">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={getChartData(selectedActivator.dailyHistory)}>
+                        <AreaChart data={getChartData(selectedActivator.dailyHistory || [])}>
                           <defs>
                             <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -388,14 +390,20 @@ export default function ProdutividadeAtivadores() {
                     <div className="mt-8">
                       <h4 className="font-bold text-sm text-muted-foreground uppercase mb-4 tracking-widest">Últimos Registros</h4>
                       <div className="grid grid-cols-4 gap-4 text-center">
-                        {selectedActivator.dailyHistory.slice(0, 4).map(day => (
+                        {(selectedActivator.dailyHistory || []).slice(0, 4).map(day => (
                           <div key={day.date} className="p-3 bg-muted/30 rounded-xl border border-muted ring-offset-2 hover:ring-2 transition-all">
-                            <div className="text-[10px] uppercase font-black text-muted-foreground mb-1">{format(parseISO(day.date), 'EEE', { locale: ptBR })} {format(parseISO(day.date), 'dd/MM')}</div>
+                            <div className="text-[10px] uppercase font-black text-muted-foreground mb-1">
+                              {day.date ? (
+                                <>
+                                  {format(parseISO(day.date), 'EEE', { locale: ptBR })} {format(parseISO(day.date), 'dd/MM')}
+                                </>
+                              ) : 'N/A'}
+                            </div>
                             <div className="flex justify-center items-end gap-1">
-                              <span className="text-xl font-black">{day.created}</span>
+                              <span className="text-xl font-black">{day.created || 0}</span>
                               <span className="text-[10px] text-green-600 pb-1 font-bold">up</span>
                             </div>
-                            <div className="text-xs font-bold text-red-400">-{day.banned} quedas</div>
+                            <div className="text-xs font-bold text-red-400">-{day.banned || 0} quedas</div>
                           </div>
                         ))}
                       </div>
