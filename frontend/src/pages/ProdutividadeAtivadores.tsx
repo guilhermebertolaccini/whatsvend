@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   Filter,
   RefreshCw,
-  Search
+  Search,
+  TrendingUp
 } from "lucide-react";
 import { linesService } from "@/services/api";
 import {
