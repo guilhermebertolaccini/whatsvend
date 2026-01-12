@@ -1339,22 +1339,31 @@ export class LinesService {
         });
       }
 
-      // REGRA CRÍTICA: Se a linha é do segmento "Padrão" OU tem segmento null, atualizar para o segmento do operador
-      // Isso garante que linhas "Padrão" se tornem permanentemente do segmento do primeiro operador vinculado
-      const shouldUpdateSegment = operator.segment !== null &&
-        (line.segment === null ||
-          (defaultSegment && line.segment === defaultSegment.id));
+      // REGRA DE OURO: Bloqueio Permanente de Segmento
+      // Se a linha é "Padrão" (ou null), ela DEVE adotar o segmento do operador IMEDIATAMENTE.
+      // Isso garante que a linha nunca mais saia desse segmento.
 
-      if (shouldUpdateSegment) {
-        await tx.linesStock.update({
-          where: { id: lineId },
-          data: { segment: operator.segment },
-        });
+      if (operator.segment !== null) {
+        const defaultSegment = await tx.segment.findUnique({ where: { name: 'Padrão' } });
 
-        console.log(`🔄 [assignOperatorToLine] Linha ${line.phone} agora pertence ao segmento ${operator.segment} (era ${line.segment === null ? 'null' : `segmento ${line.segment}`})`);
+        const isLineDefault = line.segment === null || (defaultSegment && line.segment === defaultSegment.id);
+
+        if (isLineDefault) {
+          // A linha era padrão/livre, agora pertence ao segmento do operador para sempre
+          await tx.linesStock.update({
+            where: { id: lineId },
+            data: { segment: operator.segment },
+          });
+          console.log(`🔒 [assignOperatorToLine] Linha ${line.phone} TRAVADA no segmento ${operator.segment} (era ${line.segment})`);
+        } else if (line.segment !== operator.segment) {
+          // SEGURANÇA FINAL: Se por algum milagre o código passou até aqui com segmentos diferentes, aborta.
+          throw new BadRequestException(
+            `SEGURANÇA CRÍTICA: Tentativa de vincular linha do segmento ${line.segment} a operador do segmento ${operator.segment}.`
+          );
+        }
       }
 
-      console.log(`✅ Operador ${userId} vinculado à linha ${lineId} (com lock)`);
+      console.log(`🔄 [assignOperatorToLine] Linha ${line.segment} (segmento atualizado/verificado) agora compatível com operador ${operator.segment}`);
     }, {
       isolationLevel: 'Serializable', // Nível mais alto de isolamento para evitar race conditions
       timeout: 10000, // 10 segundos de timeout

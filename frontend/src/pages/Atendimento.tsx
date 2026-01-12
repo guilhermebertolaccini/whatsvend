@@ -340,9 +340,11 @@ export default function Atendimento() {
         let title = "Mensagem bloqueada";
         if (data.error.includes("CPC")) {
           title = "Bloqueio de CPC";
+        } else if (data.error.includes("alocação de linha")) {
+          title = "Aguarde alocação";
         } else if (
           data.error.includes("repescagem") ||
-          data.error.includes("Aguarde")
+          (data.error.includes("Aguarde") && !data.error.includes("alocação"))
         ) {
           title = "Bloqueio de Repescagem";
         } else if (data.error.includes("permissão")) {
@@ -582,9 +584,9 @@ export default function Atendimento() {
         setSelectedConversation((prev) =>
           prev
             ? {
-                ...prev,
-                contactName: editContactName.trim(),
-              }
+              ...prev,
+              contactName: editContactName.trim(),
+            }
             : null
         );
 
@@ -820,10 +822,10 @@ export default function Atendimento() {
               (messageType === "image"
                 ? "Imagem enviada"
                 : messageType === "video"
-                ? "Vídeo enviado"
-                : messageType === "audio"
-                ? "Áudio enviado"
-                : "Documento enviado"),
+                  ? "Vídeo enviado"
+                  : messageType === "audio"
+                    ? "Áudio enviado"
+                    : "Documento enviado"),
             messageType,
             mediaUrl,
             fileName: data.originalName || data.fileName, // Incluir nome do arquivo para documentos
@@ -839,10 +841,10 @@ export default function Atendimento() {
               (messageType === "image"
                 ? "Imagem enviada"
                 : messageType === "video"
-                ? "Vídeo enviado"
-                : messageType === "audio"
-                ? "Áudio enviado"
-                : "Documento enviado"),
+                  ? "Vídeo enviado"
+                  : messageType === "audio"
+                    ? "Áudio enviado"
+                    : "Documento enviado"),
             sender: "operator",
             messageType,
             mediaUrl,
@@ -1224,11 +1226,10 @@ export default function Atendimento() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
-                          isRealtimeConnected
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${isRealtimeConnected
                             ? "bg-success/10 text-success"
                             : "bg-muted text-muted-foreground"
-                        }`}
+                          }`}
                       >
                         {isRealtimeConnected ? (
                           <Wifi className="h-3 w-3" />
@@ -1536,7 +1537,7 @@ export default function Atendimento() {
                       "w-full p-3 rounded-xl text-left transition-colors",
                       "hover:bg-primary/5",
                       selectedConversation?.contactPhone ===
-                        conv.contactPhone && "bg-primary/10"
+                      conv.contactPhone && "bg-primary/10"
                     )}
                   >
                     <div className="flex items-start gap-3">
@@ -1652,9 +1653,8 @@ export default function Atendimento() {
                                   const url = URL.createObjectURL(blob);
                                   const a = document.createElement("a");
                                   a.href = url;
-                                  a.download = `conversa-${
-                                    selectedConversation.contactPhone
-                                  }-${format(new Date(), "yyyy-MM-dd")}.pdf`;
+                                  a.download = `conversa-${selectedConversation.contactPhone
+                                    }-${format(new Date(), "yyyy-MM-dd")}.pdf`;
                                   document.body.appendChild(a);
                                   a.click();
                                   document.body.removeChild(a);
@@ -1730,12 +1730,12 @@ export default function Atendimento() {
                             .toLowerCase()
                             .includes(tabulationSearch.toLowerCase())
                         ).length === 0 && (
-                          <DropdownMenuItem disabled>
-                            {tabulationSearch
-                              ? "Nenhuma tabulação encontrada"
-                              : "Nenhuma tabulação disponível"}
-                          </DropdownMenuItem>
-                        )}
+                            <DropdownMenuItem disabled>
+                              {tabulationSearch
+                                ? "Nenhuma tabulação encontrada"
+                                : "Nenhuma tabulação disponível"}
+                            </DropdownMenuItem>
+                          )}
                       </div>
                     </DropdownMenuContent>
                   </DropdownMenu>
