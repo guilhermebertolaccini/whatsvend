@@ -34,36 +34,45 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuth();
-  
+
   if (isAuthenticated) {
     // Operadores devem ir direto para /atendimento
     if (user?.role === 'operador') {
       return <Navigate to="/atendimento" replace />;
     }
+    // Supervisores e Digital devem ir direto para /supervisionar
+    if (user?.role === 'supervisor' || user?.role === 'digital') {
+      return <Navigate to="/supervisionar" replace />;
+    }
     return <Navigate to="/" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
 function DashboardRoute() {
   const { user } = useAuth();
-  
+
   // Operadores não podem acessar o dashboard, redirecionar para /atendimento
   if (user?.role === 'operador') {
     return <Navigate to="/atendimento" replace />;
   }
-  
+
+  // Supervisores e Digital não podem acessar o dashboard, redirecionar para /supervisionar
+  if (user?.role === 'supervisor' || user?.role === 'digital') {
+    return <Navigate to="/supervisionar" replace />;
+  }
+
   return <Dashboard />;
 }
 

@@ -4,7 +4,7 @@ import { ReportFilterDto } from "./dto/report-filter.dto";
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   /**
    * Helper: Formatar data como YYYY-MM-DD (formato ISO)
@@ -735,7 +735,7 @@ export class ReportsService {
 
   /**
    * RELATÓRIO STATUS DE LINHA
-   * Estrutura: Data, Numero, Business, QualityScore, Tier, Segmento
+   * Estrutura: Data, Numero, Business, QualityScore (Ativo/Banido), Tier, Segmento
    */
   async getLineStatusReport(
     filters: ReportFilterDto,
@@ -747,6 +747,19 @@ export class ReportsService {
       whereClause.segment = filters.segment;
     }
 
+    // Aplicar filtro de data baseado em updatedAt
+    if (filters.startDate || filters.endDate) {
+      whereClause.updatedAt = {};
+      if (filters.startDate) {
+        whereClause.updatedAt.gte = new Date(
+          `${filters.startDate}T00:00:00.000Z`
+        );
+      }
+      if (filters.endDate) {
+        whereClause.updatedAt.lte = new Date(`${filters.endDate}T23:59:59.999Z`);
+      }
+    }
+
     // Aplicar filtro de identificador
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
@@ -754,10 +767,19 @@ export class ReportsService {
       "line"
     );
 
+    console.log(
+      "📊 [Reports] Status de Linha - Where:",
+      JSON.stringify(finalWhereClause)
+    );
+
     const lines = await this.prisma.linesStock.findMany({
       where: finalWhereClause,
       orderBy: { updatedAt: "desc" },
     });
+
+    console.log(
+      `📊 [Reports] Status de Linha - ${lines.length} linhas encontradas`
+    );
 
     const segments = await this.prisma.segment.findMany();
     const segmentMap = new Map(segments.map((s) => [s.id, s]));
@@ -769,11 +791,25 @@ export class ReportsService {
         Data: this.formatDate(line.updatedAt),
         Número: line.phone,
         "ID Negócio": line.businessID || "N/A",
-        "Pontuação de Qualidade": "N/A", // Não temos esse dado ainda
-        Nível: "N/A", // Não temos esse dado ainda
+        "Pontuação de Qualidade": line.lineStatus === "active" ? "Ativo" : "Banido",
+        Nível: "Não oficial",
         Segmento: segment?.name || "Sem segmento",
       };
     });
+
+    // Se não houver dados, retornar registro vazio com cabeçalhos
+    if (result.length === 0) {
+      return this.normalizeObject([
+        {
+          Data: "",
+          Número: "",
+          "ID Negócio": "",
+          "Pontuação de Qualidade": "",
+          Nível: "",
+          Segmento: "Nenhuma linha encontrada no período selecionado",
+        },
+      ]);
+    }
 
     return this.normalizeObject(result);
   }
@@ -1101,10 +1137,10 @@ export class ReportsService {
       const tma =
         convs.length > 1
           ? Math.round(
-              (lastConv.datetime.getTime() - firstConv.datetime.getTime()) /
-                1000 /
-                60
-            )
+            (lastConv.datetime.getTime() - firstConv.datetime.getTime()) /
+            1000 /
+            60
+          )
           : 0;
 
       result.push({
