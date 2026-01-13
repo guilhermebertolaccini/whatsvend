@@ -976,6 +976,7 @@ const reportEndpoints: Record<string, string> = {
   'kpi': 'kpi',
   'hsm': 'hsm',
   'status_linha': 'line-status',
+  'adm_linhas': 'adm-linhas',
   'envios': 'envios',
   'indicadores': 'indicadores',
   'tempos': 'tempos',

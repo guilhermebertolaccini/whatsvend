@@ -11,7 +11,7 @@ import { Response } from 'express';
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(private readonly reportsService: ReportsService) { }
 
   /**
    * Helper: Aplica filtro de segmento para supervisor
@@ -53,6 +53,12 @@ export class ReportsController {
   @Roles('admin', 'supervisor', 'digital')
   async getLineStatusReport(@Query() filters: ReportFilterDto, @CurrentUser() user: any) {
     return this.reportsService.getLineStatusReport(this.applySegmentFilter(filters, user), user.identifier);
+  }
+
+  @Get('adm-linhas')
+  @Roles('admin')
+  async getAdmLinhasReport(@Query() filters: ReportFilterDto) {
+    return this.reportsService.getAdmLinhasReport(filters);
   }
 
   /**

@@ -815,6 +815,76 @@ export class ReportsService {
   }
 
   /**
+   * RELATÓRIO ADM LINHAS (APENAS ADMIN)
+   * Estrutura: Nome da Linha, Data Criação, Status, Segmento, Data Update
+   * Filtro de data baseado em createdAt (data de criação da linha)
+   */
+  async getAdmLinhasReport(filters: ReportFilterDto) {
+    const whereClause: any = {};
+
+    if (filters.segment) {
+      whereClause.segment = filters.segment;
+    }
+
+    // Aplicar filtro de data baseado em createdAt (data de criação)
+    if (filters.startDate || filters.endDate) {
+      whereClause.createdAt = {};
+      if (filters.startDate) {
+        whereClause.createdAt.gte = new Date(
+          `${filters.startDate}T00:00:00.000Z`
+        );
+      }
+      if (filters.endDate) {
+        whereClause.createdAt.lte = new Date(`${filters.endDate}T23:59:59.999Z`);
+      }
+    }
+
+    console.log(
+      "📊 [Reports] Adm Linhas - Where:",
+      JSON.stringify(whereClause)
+    );
+
+    const lines = await this.prisma.linesStock.findMany({
+      where: whereClause,
+      orderBy: { createdAt: "desc" },
+    });
+
+    console.log(
+      `📊 [Reports] Adm Linhas - ${lines.length} linhas encontradas`
+    );
+
+    const segments = await this.prisma.segment.findMany();
+    const segmentMap = new Map(segments.map((s) => [s.id, s]));
+
+    const result = lines.map((line) => {
+      const segment = line.segment ? segmentMap.get(line.segment) : null;
+
+      return {
+        "Nome da Linha": line.phone,
+        "Data Criação": this.formatDateTime(line.createdAt),
+        Status: line.lineStatus === "active" ? "Ativo" : "Banido",
+        Segmento: segment?.name || "Sem segmento",
+        "Data Update": this.formatDateTime(line.updatedAt),
+      };
+    });
+
+    // Se não houver dados, retornar registro vazio com cabeçalhos
+    if (result.length === 0) {
+      return this.normalizeObject([
+        {
+          "Nome da Linha": "",
+          "Data Criação": "",
+          Status: "",
+          Segmento: "Nenhuma linha encontrada no período selecionado",
+          "Data Update": "",
+        },
+      ]);
+    }
+
+    return this.normalizeObject(result);
+  }
+
+  /**
    * RELATÓRIO DE ENVIOS
    * Estrutura: data_envio, hora_envio, fornecedor_envio, codigo_carteira, nome_carteira,
    * segmento_carteira, numero_contrato, cpf_cliente, telefone_cliente, status_envio,
