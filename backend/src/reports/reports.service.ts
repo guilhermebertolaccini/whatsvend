@@ -6,43 +6,69 @@ import { ReportFilterDto } from "./dto/report-filter.dto";
 export class ReportsService {
   constructor(private prisma: PrismaService) { }
 
+  // Timezone padrão para formatação de datas (São Paulo, Brasil)
+  private readonly TIMEZONE = 'America/Sao_Paulo';
+
   /**
-   * Helper: Formatar data como YYYY-MM-DD (formato ISO)
+   * Helper: Formatar data como YYYY-MM-DD (formato ISO) no timezone de São Paulo
    */
   private formatDate(date: Date): string {
-    return date.toISOString().split("T")[0];
+    const d = new Date(date);
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: this.TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    };
+    const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(d);
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
   }
 
   /**
-   * Helper: Formatar data como DD/MM/YYYY (formato brasileiro)
+   * Helper: Formatar data como DD/MM/YYYY (formato brasileiro) no timezone de São Paulo
    */
   private formatDateBrazilian(date: Date): string {
     const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
+    return d.toLocaleDateString('pt-BR', {
+      timeZone: this.TIMEZONE,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   }
 
   /**
-   * Helper: Formatar data e hora como DD/MM/YYYY HH:MM:SS
+   * Helper: Formatar data e hora como DD/MM/YYYY HH:MM:SS no timezone de São Paulo
    */
   private formatDateTime(date: Date): string {
     const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    const seconds = String(d.getSeconds()).padStart(2, "0");
-    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+    return d.toLocaleString('pt-BR', {
+      timeZone: this.TIMEZONE,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
   }
 
   /**
-   * Helper: Formatar hora como HH:MM:SS
+   * Helper: Formatar hora como HH:MM:SS no timezone de São Paulo
    */
   private formatTime(date: Date): string {
-    return date.toISOString().split("T")[1].split(".")[0];
+    const d = new Date(date);
+    return d.toLocaleTimeString('pt-BR', {
+      timeZone: this.TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
   }
 
   /**
