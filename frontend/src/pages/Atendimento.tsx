@@ -889,10 +889,8 @@ export default function Atendimento() {
         }
 
         setMessage(""); // Limpar input
-        toast({
-          title: "Arquivo enviado",
-          description: "Arquivo enviado com sucesso",
-        });
+        // NÃO mostrar toast de sucesso aqui - aguardar confirmação via WebSocket (event 'message-sent')
+        // Isso garante que a mensagem realmente foi processada e aparece no chat
       } catch (error) {
         console.error("Erro ao fazer upload:", error);
         playErrorSound();

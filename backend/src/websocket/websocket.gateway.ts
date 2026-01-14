@@ -1768,11 +1768,14 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       const recoveryResult = await this.recoverAndRetryMessage(client, user, data, error);
 
       if (recoveryResult.success) {
-        // Sucesso após recuperação - não mostrar erro para o operador
+        // Sucesso após recuperação - emitir confirmação para o operador
+        client.emit('message-sent', { message: recoveryResult.conversation });
         return { success: true, conversation: recoveryResult.conversation };
       } else {
-        // Falhou após todas as tentativas - não notificar operador
-        return { error: 'Não foi possível enviar a mensagem' };
+        // Falhou após todas as tentativas - notificar operador sobre o erro
+        const errorMessage = recoveryResult.reason || 'Não foi possível enviar a mensagem. Tente novamente.';
+        client.emit('message-error', { error: errorMessage });
+        return { error: errorMessage };
       }
     }
   }
