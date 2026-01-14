@@ -20,7 +20,7 @@ import { PrismaService } from '../prisma.service';
         },
       }),
       limits: {
-        fileSize: 16 * 1024 * 1024, // 16MB (limite WhatsApp)
+        fileSize: 200 * 1024 * 1024, // 200MB
       },
     }),
   ],
@@ -28,5 +28,5 @@ import { PrismaService } from '../prisma.service';
   providers: [MediaService, PrismaService],
   exports: [MediaService],
 })
-export class MediaModule {}
+export class MediaModule { }
 

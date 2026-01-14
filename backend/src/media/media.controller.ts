@@ -17,7 +17,7 @@ import { MediaService } from './media.service';
 
 @Controller('media')
 export class MediaController {
-  constructor(private readonly mediaService: MediaService) {}
+  constructor(private readonly mediaService: MediaService) { }
 
   /**
    * Upload de mídia (operador enviando)
@@ -30,22 +30,64 @@ export class MediaController {
       throw new BadRequestException('Arquivo é obrigatório');
     }
 
-    // Validar tipo de arquivo
+    // Validar tipo de arquivo - lista ampla de tipos permitidos
     const allowedMimes = [
+      // Imagens
       'image/jpeg',
       'image/png',
       'image/gif',
       'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'image/svg+xml',
+      'image/heic',
+      'image/heif',
+      // Vídeos
       'video/mp4',
       'video/mpeg',
+      'video/quicktime',
+      'video/x-msvideo',
+      'video/x-ms-wmv',
+      'video/webm',
+      'video/3gpp',
+      'video/x-flv',
+      'video/x-matroska',
+      // Áudios
       'audio/mpeg',
       'audio/ogg',
       'audio/mp4',
+      'audio/wav',
+      'audio/x-wav',
+      'audio/webm',
+      'audio/aac',
+      'audio/flac',
+      'audio/x-m4a',
+      // Documentos
       'application/pdf',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/rtf',
+      'application/vnd.oasis.opendocument.text',
+      'application/vnd.oasis.opendocument.spreadsheet',
+      'application/vnd.oasis.opendocument.presentation',
+      // Texto
+      'text/plain',
+      'text/csv',
+      'text/html',
+      'text/xml',
+      'application/json',
+      // Compactados
+      'application/zip',
+      'application/x-rar-compressed',
+      'application/x-7z-compressed',
+      'application/gzip',
+      'application/x-tar',
+      // Outros
+      'application/octet-stream', // Genérico para tipos não reconhecidos
     ];
 
     if (!allowedMimes.includes(file.mimetype)) {
@@ -73,7 +115,7 @@ export class MediaController {
     try {
       // Verificar se arquivo existe
       await this.mediaService.getFilePath(filename);
-      
+
       // Enviar arquivo - usar apenas o filename, root já aponta para process.cwd()
       // O caminho será: process.cwd() + './uploads/' + filename
       const filePath = path.join('uploads', filename);

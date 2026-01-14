@@ -1404,14 +1404,27 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
                 // Ler arquivo
                 const fileBuffer = await fs.readFile(filePath);
 
-                // Validar tamanho do arquivo (máximo 64MB - limite do WhatsApp)
-                const maxSizeBytes = 64 * 1024 * 1024; // 64MB
+                // Validar tamanho do arquivo (máximo 200MB)
+                const maxSizeBytes = 200 * 1024 * 1024; // 200MB
                 if (fileBuffer.length > maxSizeBytes) {
-                  throw new Error(`Arquivo muito grande: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB. Máximo permitido: 64MB`);
+                  throw new Error(`Arquivo muito grande: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB. Máximo permitido: 200MB`);
                 }
 
-                // Validar extensão/tipo do arquivo
-                const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mpeg', 'avi', 'mov', 'mp3', 'ogg', 'wav', 'm4a'];
+                // Validar extensão/tipo do arquivo - lista ampla
+                const allowedExtensions = [
+                  // Imagens
+                  'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'svg', 'heic', 'heif',
+                  // Vídeos
+                  'mp4', 'mpeg', 'avi', 'mov', 'wmv', 'webm', '3gp', 'flv', 'mkv',
+                  // Áudios
+                  'mp3', 'ogg', 'wav', 'm4a', 'aac', 'flac', 'wma',
+                  // Documentos
+                  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'odt', 'ods', 'odp',
+                  // Texto
+                  'txt', 'csv', 'html', 'xml', 'json',
+                  // Compactados
+                  'zip', 'rar', '7z', 'gz', 'tar',
+                ];
                 const fileExt = filename.split('.').pop()?.toLowerCase();
                 if (!fileExt || !allowedExtensions.includes(fileExt)) {
                   console.warn(`⚠️ [WebSocket] Extensão de arquivo não reconhecida: ${fileExt}. Continuando mesmo assim...`);

@@ -736,20 +736,40 @@ export default function Atendimento() {
       if (!selectedConversation || isUploadingFile) return;
 
       // Validações de arquivo
-      const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB
+      const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
       const ALLOWED_TYPES = [
+        // Imagens
         "image/jpeg",
         "image/jpg",
         "image/png",
         "image/gif",
         "image/webp",
+        "image/bmp",
+        "image/tiff",
+        "image/svg+xml",
+        "image/heic",
+        "image/heif",
+        // Vídeos
         "video/mp4",
         "video/mpeg",
         "video/quicktime",
+        "video/x-msvideo",
+        "video/x-ms-wmv",
+        "video/webm",
+        "video/3gpp",
+        "video/x-flv",
+        "video/x-matroska",
+        // Áudios
         "audio/mpeg",
         "audio/ogg",
         "audio/mp4",
         "audio/wav",
+        "audio/x-wav",
+        "audio/webm",
+        "audio/aac",
+        "audio/flac",
+        "audio/x-m4a",
+        // Documentos
         "application/pdf",
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -757,8 +777,22 @@ export default function Atendimento() {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.ms-powerpoint",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/rtf",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/vnd.oasis.opendocument.presentation",
+        // Texto
         "text/plain",
         "text/csv",
+        "text/html",
+        "text/xml",
+        "application/json",
+        // Compactados
+        "application/zip",
+        "application/x-rar-compressed",
+        "application/x-7z-compressed",
+        "application/gzip",
+        "application/x-tar",
       ];
 
       // Validar tamanho
@@ -1227,8 +1261,8 @@ export default function Atendimento() {
                     <TooltipTrigger asChild>
                       <div
                         className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${isRealtimeConnected
-                            ? "bg-success/10 text-success"
-                            : "bg-muted text-muted-foreground"
+                          ? "bg-success/10 text-success"
+                          : "bg-muted text-muted-foreground"
                           }`}
                       >
                         {isRealtimeConnected ? (
