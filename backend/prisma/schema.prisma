@@ -54,6 +54,7 @@ model User {
   status         Status   @default(Offline)
   oneToOneActive Boolean  @default(true) // Se true, operador pode chamar clientes no 1x1
   identifier     Identifier @default(proprietario) // cliente ou proprietario - usado para filtrar relatórios
+  isActive       Boolean  @default(true) // Se true, usuário está ativo no sistema
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -66,6 +67,7 @@ model User {
   @@index([line])
   @@index([role, status])
   @@index([identifier])
+  @@index([isActive])
 
   systemEvents SystemEvent[]
 }

@@ -89,11 +89,12 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'supervisor' | 'operator' | 'digital';
+  role: 'admin' | 'supervisor' | 'operator' | 'ativador' | 'digital';
   segment: number | null;
   line: number | null;
   status: 'Online' | 'Offline';
   oneToOneActive?: boolean;
+  isActive?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -102,24 +103,26 @@ export interface CreateUserData {
   name: string;
   email: string;
   password: string;
-  role: 'admin' | 'supervisor' | 'operator' | 'digital'; // ✅
+  role: 'admin' | 'supervisor' | 'operator' | 'ativador' | 'digital';
   segment?: number;
   line?: number;
   status?: 'Online' | 'Offline';
   oneToOneActive?: boolean;
   identifier?: 'cliente' | 'proprietario';
+  isActive?: boolean;
 }
 
 export interface UpdateUserData {
   name?: string;
   email?: string;
   password?: string;
-  role?: 'admin' | 'supervisor' | 'operator' | 'digital'; // ✅
+  role?: 'admin' | 'supervisor' | 'operator' | 'ativador' | 'digital';
   segment?: number | null;
   line?: number | null;
   status?: 'Online' | 'Offline';
   oneToOneActive?: boolean;
   identifier?: 'cliente' | 'proprietario';
+  isActive?: boolean;
 }
 
 export const usersService = {

@@ -57,4 +57,13 @@ export class CreateUserDto {
   @IsEnum(Identifier)
   @IsOptional()
   identifier?: Identifier; // cliente ou proprietario - usado para filtrar relatórios
+
+  @Transform(({ value }) => {
+    // Se não for especificado, retornar undefined para usar o default do schema (true)
+    if (value === null || value === undefined || value === '') return undefined;
+    return Boolean(value);
+  })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean; // Se true, usuário está ativo no sistema (padrão: true)
 }

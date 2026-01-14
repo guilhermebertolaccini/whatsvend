@@ -63,4 +63,12 @@ export class UpdateUserDto {
   @IsEnum(Identifier)
   @IsOptional()
   identifier?: Identifier; // cliente ou proprietario - usado para filtrar relatórios
+
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return undefined;
+    return Boolean(value);
+  })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean; // Se true, usuário está ativo no sistema
 }

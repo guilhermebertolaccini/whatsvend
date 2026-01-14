@@ -37,6 +37,7 @@ interface User {
   isOnline: boolean;
   oneToOneActive?: boolean;
   identifier?: "cliente" | "proprietario";
+  isActive: boolean;
 }
 
 const roleColors = {
@@ -114,6 +115,7 @@ export default function Usuarios() {
     line: "",
     oneToOneActive: false,
     identifier: "proprietario" as "cliente" | "proprietario",
+    isActive: true,
   });
 
   // Load data on mount
@@ -145,6 +147,7 @@ export default function Usuarios() {
             isOnline: u.status === "Online",
             oneToOneActive: u.oneToOneActive ?? false,
             identifier: (u as any).identifier || "proprietario",
+            isActive: (u as any).isActive ?? true,
           };
         })
       );
@@ -200,6 +203,15 @@ export default function Usuarios() {
         </div>
       ),
     },
+    {
+      key: "isActive",
+      label: "Ativo",
+      render: (user) => (
+        <Badge className={user.isActive ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}>
+          {user.isActive ? "Ativo" : "Inativo"}
+        </Badge>
+      ),
+    },
   ];
 
   const handleAdd = () => {
@@ -213,6 +225,7 @@ export default function Usuarios() {
       line: "",
       oneToOneActive: false,
       identifier: "proprietario",
+      isActive: true,
     });
     setIsFormOpen(true);
   };
@@ -228,6 +241,7 @@ export default function Usuarios() {
       line: user.line ? String(user.line) : "",
       oneToOneActive: user.oneToOneActive ?? false,
       identifier: user.identifier || "proprietario",
+      isActive: user.isActive,
     });
     setIsFormOpen(true);
   };
@@ -280,6 +294,7 @@ export default function Usuarios() {
           line: formData.line ? Number(formData.line) : null,
           oneToOneActive: formData.oneToOneActive,
           identifier: formData.identifier,
+          isActive: formData.isActive,
         };
         if (formData.password) {
           updateData.password = formData.password;
@@ -305,6 +320,7 @@ export default function Usuarios() {
                 isOnline: updated.status === "Online",
                 oneToOneActive: updated.oneToOneActive ?? false,
                 identifier: (updated as any).identifier || "proprietario",
+                isActive: (updated as any).isActive ?? true,
               };
             }
             return u;
@@ -324,6 +340,7 @@ export default function Usuarios() {
           line: formData.line ? Number(formData.line) : undefined,
           oneToOneActive: formData.oneToOneActive,
           identifier: formData.identifier,
+          isActive: formData.isActive,
         });
         const newUserLine = lines.find((l) => l.id === created.line);
         setUsers([
@@ -340,6 +357,7 @@ export default function Usuarios() {
             isOnline: created.status === "Online",
             oneToOneActive: created.oneToOneActive ?? false,
             identifier: (created as any).identifier || "proprietario",
+            isActive: (created as any).isActive ?? true,
           },
         ]);
         toast({
@@ -417,27 +435,27 @@ export default function Usuarios() {
       {(formData.role === "operador" ||
         formData.role === "supervisor" ||
         formData.role === "digital") && (
-        <div className="space-y-2">
-          <Label htmlFor="segment">Segmento</Label>
-          <Select
-            value={formData.segment}
-            onValueChange={(value) =>
-              setFormData({ ...formData, segment: value })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione um segmento" />
-            </SelectTrigger>
-            <SelectContent>
-              {segments.map((segment) => (
-                <SelectItem key={segment.id} value={String(segment.id)}>
-                  {segment.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+          <div className="space-y-2">
+            <Label htmlFor="segment">Segmento</Label>
+            <Select
+              value={formData.segment}
+              onValueChange={(value) =>
+                setFormData({ ...formData, segment: value })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um segmento" />
+              </SelectTrigger>
+              <SelectContent>
+                {segments.map((segment) => (
+                  <SelectItem key={segment.id} value={String(segment.id)}>
+                    {segment.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       <div className="space-y-2">
         <Label htmlFor="line">Linha WhatsApp</Label>
         <Select
@@ -485,6 +503,22 @@ export default function Usuarios() {
           />
         </div>
       )}
+      <div className="flex items-center justify-between rounded-lg border p-4">
+        <div className="space-y-0.5">
+          <Label className="text-base font-medium">Usuário Ativo</Label>
+          <p className="text-sm text-muted-foreground">
+            Define se o usuário está ativado no sistema
+          </p>
+        </div>
+        <input
+          type="checkbox"
+          checked={formData.isActive}
+          onChange={(e) =>
+            setFormData({ ...formData, isActive: e.target.checked })
+          }
+          className="h-4 w-4 rounded border-gray-300"
+        />
+      </div>
       <DialogFooter>
         <Button
           variant="outline"
@@ -521,11 +555,10 @@ export default function Usuarios() {
       const result = await usersService.uploadCSV(file);
       toast({
         title: "Importação concluída",
-        description: `${result.message}. ${
-          result.errors.length > 0
-            ? `${result.errors.length} erro(s) encontrado(s).`
-            : ""
-        }`,
+        description: `${result.message}. ${result.errors.length > 0
+          ? `${result.errors.length} erro(s) encontrado(s).`
+          : ""
+          }`,
         variant: result.errors.length > 0 ? "default" : "success",
       });
 
@@ -559,8 +592,8 @@ export default function Usuarios() {
       <MainLayout>
         <div className="h-full overflow-y-auto scrollbar-content">
           <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
         </div>
       </MainLayout>
     );
@@ -570,47 +603,47 @@ export default function Usuarios() {
     <MainLayout>
       <div className="h-full overflow-y-auto scrollbar-content">
         <div className="animate-fade-in">
-        <div className="mb-4 flex justify-end gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleUploadCSV}
-            className="hidden"
-            id="csv-upload-users"
+          <div className="mb-4 flex justify-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleUploadCSV}
+              className="hidden"
+              id="csv-upload-users"
+            />
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Importar CSV
+                </>
+              )}
+            </Button>
+          </div>
+          <CrudTable
+            title="Usuários"
+            subtitle="Gerenciar usuários do sistema"
+            columns={columns}
+            data={users}
+            searchPlaceholder="Buscar usuários..."
+            onAdd={handleAdd}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            renderForm={renderForm}
+            isFormOpen={isFormOpen}
+            onFormOpenChange={setIsFormOpen}
+            editingItem={editingUser}
           />
-          <Button
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Importando...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" />
-                Importar CSV
-              </>
-            )}
-          </Button>
-        </div>
-        <CrudTable
-          title="Usuários"
-          subtitle="Gerenciar usuários do sistema"
-          columns={columns}
-          data={users}
-          searchPlaceholder="Buscar usuários..."
-          onAdd={handleAdd}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          renderForm={renderForm}
-          isFormOpen={isFormOpen}
-          onFormOpenChange={setIsFormOpen}
-          editingItem={editingUser}
-        />
         </div>
       </div>
     </MainLayout>
