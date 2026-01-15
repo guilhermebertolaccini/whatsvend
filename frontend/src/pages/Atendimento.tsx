@@ -441,23 +441,29 @@ export default function Atendimento() {
             new Date(a.lastMessageTime).getTime()
         );
 
-      // Aplicar filtro
+      // Aplicar filtro com regras de 6 horas
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+
       if (conversationFilter !== "todas") {
         groups = groups.filter((group) => {
+          const lastMsgTime = new Date(group.lastMessageTime);
+
           if (conversationFilter === "finalizadas") {
-            return group.isTabulated === true;
+            // Finalizadas: apenas tabuladas nas últimas 6 horas
+            return group.isTabulated === true && lastMsgTime >= sixHoursAgo;
           }
           // Para stand-by e atendimento, só mostrar não tabuladas
           if (group.isTabulated === true) {
             return false;
           }
           if (conversationFilter === "stand-by") {
-            // Stand By: última mensagem foi do operador (aguardando resposta do cliente)
-            return group.isFromContact === false;
+            // Stand By: SEM resposta do cliente há mais de 6 horas
+            return group.isFromContact === false && lastMsgTime < sixHoursAgo;
           }
           if (conversationFilter === "atendimento") {
-            // Atendimento: última mensagem foi do cliente (aguardando resposta do operador)
-            return group.isFromContact === true;
+            // Atendimento: TODAS as conversas ativas que não estão em stand-by
+            // Mostra se: cliente respondeu OU operador enviou há menos de 6h
+            return group.isFromContact === true || lastMsgTime >= sixHoursAgo;
           }
           return true;
         });
@@ -1520,21 +1526,21 @@ export default function Atendimento() {
               </Button>
               <Button
                 variant={
-                  conversationFilter === "stand-by" ? "default" : "outline"
-                }
-                size="sm"
-                onClick={() => setConversationFilter("stand-by")}
-              >
-                Stand By
-              </Button>
-              <Button
-                variant={
                   conversationFilter === "atendimento" ? "default" : "outline"
                 }
                 size="sm"
                 onClick={() => setConversationFilter("atendimento")}
               >
                 Atendimento
+              </Button>
+              <Button
+                variant={
+                  conversationFilter === "stand-by" ? "default" : "outline"
+                }
+                size="sm"
+                onClick={() => setConversationFilter("stand-by")}
+              >
+                Stand By
               </Button>
               <Button
                 variant={
