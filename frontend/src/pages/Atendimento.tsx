@@ -1126,7 +1126,7 @@ export default function Atendimento() {
     });
 
     try {
-      // Primeiro, criar ou atualizar o contato
+      // Primeiro, criar ou atualizar o contato (se já existir, apenas ignorar erro)
       try {
         await contactsService.create({
           name: contactNameValue,
@@ -1135,8 +1135,9 @@ export default function Atendimento() {
           contract: contactContractValue || undefined,
           segment: user.segmentId,
         });
-      } catch {
-        // Contato pode já existir, ignorar erro
+      } catch (error) {
+        // Contato pode já existir (erro 500), ignorar erro para não bloquear envio da mensagem
+        console.warn("Contato possivelmente já existe, continuando com envio...", error);
       }
 
       // Usar WebSocket para enviar a mensagem escrita pelo operador
