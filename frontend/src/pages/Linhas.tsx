@@ -61,14 +61,45 @@ export default function Linhas() {
     receiveMedia: false
   });
   const [isQrCodeOpen, setIsQrCodeOpen] = useState(false);
-  const [qrCodeState, setQrCodeState] = useState<'loading' | 'success' | 'error'>('loading');
+  const [qrCodeState, setQrCodeState] = useState<'loading' | 'success' | 'error' | 'connected'>('loading');
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [qrCodeLineId, setQrCodeLineId] = useState<number | null>(null); // ID da linha sendo escaneada
   const { playSuccessSound, playErrorSound, playWarningSound } = useNotificationSound();
 
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  // Polling automático para detectar conexão bem-sucedida
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (isQrCodeOpen && qrCodeData && qrCodeLineId && qrCodeState === 'success') {
+      intervalId = setInterval(async () => {
+        try {
+          const response = await linesService.getQrCode(qrCodeLineId);
+          if (response.connected) {
+            setQrCodeData(null);
+            setQrCodeState('connected');
+            playSuccessSound();
+            toast({
+              title: "Linha conectada!",
+              description: "A linha foi conectada com sucesso ao WhatsApp.",
+            });
+            loadData();
+            if (intervalId) clearInterval(intervalId);
+          }
+        } catch (error) {
+          console.error('Error polling QR status:', error);
+        }
+      }, 3000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isQrCodeOpen, qrCodeData, qrCodeLineId, qrCodeState, playSuccessSound]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -94,7 +125,7 @@ export default function Linhas() {
         operators: l.operators || []
       }));
       setAllLines(mappedLines);
-      
+
       // Aplicar filtro local se necessário
       let filtered = mappedLines;
       if (statusFilter !== 'all') {
@@ -147,9 +178,9 @@ export default function Linhas() {
     //     </Badge>
     //   )
     // },
-    { 
-      key: "evolutionName", 
-      label: "Evolution" 
+    {
+      key: "evolutionName",
+      label: "Evolution"
     },
     {
       key: "operators",
@@ -320,14 +351,16 @@ export default function Linhas() {
 
     setQrCodeState('loading');
     setQrCodeData(null);
+    setQrCodeLineId(Number(targetLine.id)); // Salvar ID da linha para polling
     setIsQrCodeOpen(true);
 
     try {
       const response = await linesService.getQrCode(Number(targetLine.id));
       console.log('QR Code response:', response);
-      
+
       if (response.connected) {
-        setQrCodeState('success');
+        setQrCodeState('connected'); // Estado 'connected' para linha já conectada
+        setQrCodeData(null);
         playSuccessSound();
         toast({
           title: "Linha já conectada",
@@ -335,7 +368,7 @@ export default function Linhas() {
         });
         return;
       }
-      
+
       if (response.qrcode) {
         setQrCodeData(response.qrcode);
         setQrCodeState('success');
@@ -413,7 +446,7 @@ export default function Linhas() {
           </SelectContent>
         </Select>
       </div>
-      
+
       {/* Receber Mídia - ativa webhook_base64 para receber imagens/áudios/docs */}
       <div className="flex items-center space-x-2 pt-2">
         <Checkbox
@@ -503,7 +536,7 @@ export default function Linhas() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         </div>
-    </MainLayout>
+      </MainLayout>
     );
   }
 
@@ -555,62 +588,65 @@ export default function Linhas() {
 
         {/* QR Code Modal */}
         <Dialog open={isQrCodeOpen} onOpenChange={setIsQrCodeOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>QR Code da Linha</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col items-center py-6">
-            {qrCodeState === 'loading' && (
-              <div className="flex flex-col items-center">
-                <Loader2 className="h-16 w-16 animate-spin text-primary" />
-                <p className="text-muted-foreground mt-4">Gerando QR Code...</p>
-              </div>
-            )}
-            {qrCodeState === 'success' && qrCodeData && (
-              <>
-                <div className="w-64 h-64 bg-white rounded-lg flex items-center justify-center overflow-hidden p-2">
-                  <img src={qrCodeData} alt="QR Code" className="w-full h-full object-contain" />
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>QR Code da Linha</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center py-6">
+              {qrCodeState === 'loading' && (
+                <div className="flex flex-col items-center">
+                  <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                  <p className="text-muted-foreground mt-4">Gerando QR Code...</p>
                 </div>
-                <div className="mt-6 space-y-2 text-center text-sm text-muted-foreground">
-                  <p>1. Abra o WhatsApp no seu celular</p>
-                  <p>2. Toque em "Dispositivos conectados"</p>
-                  <p>3. Escaneie este QR Code</p>
+              )}
+              {qrCodeState === 'success' && qrCodeData && (
+                <>
+                  <div className="w-64 h-64 bg-white rounded-lg flex items-center justify-center overflow-hidden p-2">
+                    <img src={qrCodeData} alt="QR Code" className="w-full h-full object-contain" />
+                  </div>
+                  <div className="mt-6 space-y-2 text-center text-sm text-muted-foreground">
+                    <p>1. Abra o WhatsApp no seu celular</p>
+                    <p>2. Toque em "Dispositivos conectados"</p>
+                    <p>3. Escaneie este QR Code</p>
+                  </div>
+                  <Button variant="outline" onClick={handleShowQrCode} className="mt-4">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Atualizar QR Code
+                  </Button>
+                </>
+              )}
+              {qrCodeState === 'connected' && (
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-medium text-foreground">Linha conectada!</p>
+                  <p className="text-muted-foreground mt-2">Esta linha está conectada ao WhatsApp.</p>
+                  <Button variant="outline" onClick={() => setIsQrCodeOpen(false)} className="mt-4">
+                    Fechar
+                  </Button>
                 </div>
-                <Button variant="outline" onClick={handleShowQrCode} className="mt-4">
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Atualizar QR Code
-                </Button>
-              </>
-            )}
-            {qrCodeState === 'success' && !qrCodeData && (
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
-                  <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+              )}
+              {qrCodeState === 'error' && (
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-medium text-destructive">Erro ao gerar QR Code</p>
+                  <p className="text-muted-foreground mt-2">Aguarde alguns segundos e tente novamente.</p>
+                  <Button variant="outline" onClick={handleShowQrCode} className="mt-4">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Tentar novamente
+                  </Button>
                 </div>
-                <p className="text-lg font-medium text-foreground">Linha já conectada!</p>
-                <p className="text-muted-foreground mt-2">Esta linha já está conectada ao WhatsApp.</p>
-              </div>
-            )}
-            {qrCodeState === 'error' && (
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
-                  <svg className="w-8 h-8 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </div>
-                <p className="text-lg font-medium text-destructive">Erro ao gerar QR Code</p>
-                <p className="text-muted-foreground mt-2">Aguarde alguns segundos e tente novamente.</p>
-                <Button variant="outline" onClick={handleShowQrCode} className="mt-4">
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Tentar novamente
-                </Button>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );
