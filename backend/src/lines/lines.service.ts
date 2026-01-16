@@ -397,6 +397,14 @@ export class LinesService {
 
         // Se já está conectado, não precisa de QR Code
         if (connectionResponse.data?.state === 'open' || connectionResponse.data?.instance?.state === 'open') {
+          // Atualizar status da linha para 'active' se ainda não estiver
+          if (line.lineStatus !== 'active') {
+            await this.prisma.linesStock.update({
+              where: { id },
+              data: { lineStatus: 'active' },
+            });
+            console.log(`✅ Linha ${line.phone} marcada como ACTIVE após conexão`);
+          }
           return { qrcode: null, connected: true, message: 'Linha já está conectada' };
         }
       } catch (connError) {

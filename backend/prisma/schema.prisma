@@ -22,6 +22,7 @@ enum Status {
 }
 
 enum LineStatus {
+  connecting
   active
   ban
 }
@@ -158,7 +159,7 @@ model BlockList {
 model LinesStock {
   id            Int        @id @default(autoincrement())
   phone         String     @unique
-  lineStatus    LineStatus @default(active)
+  lineStatus    LineStatus @default(connecting)
   segment       Int?
   linkedTo      Int? // Mantido para compatibilidade (deprecated - usar LineOperators)
   evolutionName String

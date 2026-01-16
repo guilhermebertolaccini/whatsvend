@@ -28,7 +28,7 @@ import { linesService, segmentsService, evolutionService, type Line as ApiLine, 
 interface Line {
   id: string;
   phone: string;
-  status: 'active' | 'banned';
+  status: 'active' | 'connecting' | 'banned';
   type: 'official' | 'evolution';
   evolutionName?: string;
   segment?: number;
@@ -58,7 +58,8 @@ export default function Linhas() {
     token: '',
     businessId: '',
     numberId: '',
-    receiveMedia: false
+    receiveMedia: false,
+    lineStatus: '' // Para edição manual do status
   });
   const [isQrCodeOpen, setIsQrCodeOpen] = useState(false);
   const [qrCodeState, setQrCodeState] = useState<'loading' | 'success' | 'error' | 'connected'>('loading');
@@ -114,11 +115,11 @@ export default function Linhas() {
         evolutionService.list()
       ]);
 
-      const mappedLines = linesData.map((l: ApiLine) => ({
+      const mappedLines: Line[] = linesData.map((l: ApiLine) => ({
         id: String(l.id),
         phone: l.phone,
-        status: l.lineStatus === 'active' ? 'active' : 'banned',
-        type: l.oficial ? 'official' : 'evolution',
+        status: (l.lineStatus === 'active' ? 'active' : (l.lineStatus === 'connecting' ? 'connecting' : 'banned')) as 'active' | 'connecting' | 'banned',
+        type: (l.oficial ? 'official' : 'evolution') as 'official' | 'evolution',
         evolutionName: l.evolutionName,
         segment: l.segment ?? undefined,
         segmentName: l.segmentName ?? null,
@@ -154,8 +155,14 @@ export default function Linhas() {
       key: "status",
       label: "Status",
       render: (line) => (
-        <Badge className={line.status === 'active' ? "bg-success" : "bg-destructive"}>
-          {line.status === 'active' ? "Ativa" : "Banida"}
+        <Badge className={
+          line.status === 'active'
+            ? "bg-success"
+            : line.status === 'connecting'
+              ? "bg-yellow-500"
+              : "bg-destructive"
+        }>
+          {line.status === 'active' ? "Ativa" : line.status === 'connecting' ? "Em Conexão" : "Banida"}
         </Badge>
       )
     },
@@ -204,7 +211,7 @@ export default function Linhas() {
 
   const handleAdd = () => {
     setEditingLine(null);
-    setFormData({ phone: '', segment: '', evolutionId: '', isOfficial: false, token: '', businessId: '', numberId: '', receiveMedia: false });
+    setFormData({ phone: '', segment: '', evolutionId: '', isOfficial: false, token: '', businessId: '', numberId: '', receiveMedia: false, lineStatus: 'connecting' });
     setIsFormOpen(true);
   };
 
@@ -221,7 +228,8 @@ export default function Linhas() {
         token: '',
         businessId: '',
         numberId: '',
-        receiveMedia: fullLine.receiveMedia || false
+        receiveMedia: fullLine.receiveMedia || false,
+        lineStatus: fullLine.lineStatus || 'connecting'
       });
     } catch {
       setFormData({
@@ -232,7 +240,8 @@ export default function Linhas() {
         token: '',
         businessId: '',
         numberId: '',
-        receiveMedia: false
+        receiveMedia: false,
+        lineStatus: line.status === 'banned' ? 'ban' : line.status
       });
     }
     setIsFormOpen(true);
@@ -289,7 +298,7 @@ export default function Linhas() {
 
     setIsSaving(true);
     try {
-      const lineData = {
+      const lineData: any = {
         phone: formData.phone,
         evolutionName: formData.evolutionId,
         segment: formData.segment ? Number(formData.segment) : undefined,
@@ -300,13 +309,19 @@ export default function Linhas() {
         receiveMedia: formData.receiveMedia,
       };
 
+      // Adicionar lineStatus apenas na edição
+      if (editingLine && formData.lineStatus) {
+        lineData.lineStatus = formData.lineStatus;
+      }
+
       if (editingLine) {
         const updated = await linesService.update(Number(editingLine.id), lineData);
+        const newStatus = updated.lineStatus === 'active' ? 'active' : (updated.lineStatus === 'connecting' ? 'connecting' : 'banned');
         setLines(lines.map(l => l.id === editingLine.id ? {
           id: String(updated.id),
           phone: updated.phone,
-          status: updated.lineStatus === 'active' ? 'active' : 'banned',
-          type: updated.oficial ? 'official' : 'evolution',
+          status: newStatus as 'active' | 'connecting' | 'banned',
+          type: (updated.oficial ? 'official' : 'evolution') as 'official' | 'evolution',
           evolutionName: updated.evolutionName,
           segment: updated.segment ?? undefined
         } : l));
@@ -462,6 +477,26 @@ export default function Linhas() {
         Ativa o recebimento de arquivos de mídia via webhook Base64
       </p>
 
+      {/* Status da Linha - apenas para edição */}
+      {editingLine && (
+        <div className="space-y-2 pt-2">
+          <Label htmlFor="lineStatus">Status da Linha</Label>
+          <Select value={formData.lineStatus} onValueChange={(value) => setFormData({ ...formData, lineStatus: value })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione o status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="connecting">Em Conexão</SelectItem>
+              <SelectItem value="active">Ativa</SelectItem>
+              <SelectItem value="ban">Banida</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Linhas "Em Conexão" não são alocadas para operadores
+          </p>
+        </div>
+      )}
+
       {/* OCULTO: Opção Cloud API - Funcionalidade oculta por enquanto
       <div className="flex items-center space-x-2 pt-2">
         <Checkbox
@@ -554,6 +589,7 @@ export default function Linhas() {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="active">Ativas</SelectItem>
+                  <SelectItem value="connecting">Em Conexão</SelectItem>
                   <SelectItem value="banned">Banidas</SelectItem>
                 </SelectContent>
               </Select>
