@@ -5,24 +5,25 @@ export enum EventType {
   // Operador
   OPERATOR_CONNECTED = 'operator_connected',
   OPERATOR_DISCONNECTED = 'operator_disconnected',
-  
+
   // Linhas
   LINE_ASSIGNED = 'line_assigned',
   LINE_REALLOCATED = 'line_reallocated',
   LINE_BANNED = 'line_banned',
+  LINE_DISCONNECTED = 'line_disconnected',
   LINE_UNASSIGNED = 'line_unassigned',
-  
+
   // Mensagens
   MESSAGE_SENT = 'message_sent',
   MESSAGE_RECEIVED = 'message_received',
   MESSAGE_QUEUED = 'message_queued',
   MESSAGE_PROCESSED = 'message_processed',
-  
+
   // Erros
   API_ERROR = 'api_error',
   TIMEOUT_ERROR = 'timeout_error',
   HEALTH_CHECK_FAILED = 'health_check_failed',
-  
+
   // Sistema
   CPC_TRIGGERED = 'cpc_triggered',
   REPESCAGEM_TRIGGERED = 'repescagem_triggered',
@@ -49,7 +50,7 @@ export enum EventModule {
 
 @Injectable()
 export class SystemEventsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   /**
    * Registra um evento no sistema

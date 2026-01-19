@@ -23,7 +23,7 @@ export class OperatorQueueService {
     @Inject(forwardRef(() => WebsocketGateway))
     private websocketGateway: WebsocketGateway,
     private logger: AppLoggerService,
-  ) {}
+  ) { }
 
   /**
    * Adiciona operador à fila de espera
@@ -265,7 +265,7 @@ export class OperatorQueueService {
         return;
       }
 
-      // Buscar linhas disponíveis (com menos de 2 operadores)
+      // Buscar linhas disponíveis com informações de segmento
       const availableLines = await this.prisma.linesStock.findMany({
         where: {
           lineStatus: 'active',
@@ -275,8 +275,16 @@ export class OperatorQueueService {
         },
       });
 
+      // Buscar configuração de todos os segmentos
+      const segments = await this.prisma.segment.findMany({
+        select: { id: true, maxOperatorsPerLine: true },
+      });
+      const segmentMaxMap = new Map(segments.map(s => [s.id, s.maxOperatorsPerLine]));
+
       const linesToAssign = availableLines.filter(line => {
-        const maxOperators = line.isReserve ? 1 : 2;
+        // Usar maxOperatorsPerLine do segmento, ou 2 como padrão
+        const segmentMax = line.segment ? segmentMaxMap.get(line.segment) : 2;
+        const maxOperators = line.isReserve ? 1 : (segmentMax ?? 2);
         return line.operators.length < maxOperators;
       });
 

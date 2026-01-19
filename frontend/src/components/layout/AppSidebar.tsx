@@ -154,6 +154,13 @@ const menuItems: MenuItem[] = [
     roles: ["admin"],
   },
   {
+    title: "Regras de Alocação",
+    url: "/regras-alocacao",
+    icon: Settings,
+    color: "text-violet-500",
+    roles: ["admin"],
+  },
+  {
     title: "Usuários",
     url: "/usuarios",
     icon: Users,

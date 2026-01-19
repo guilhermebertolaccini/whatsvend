@@ -28,7 +28,7 @@ import { linesService, segmentsService, evolutionService, type Line as ApiLine, 
 interface Line {
   id: string;
   phone: string;
-  status: 'active' | 'connecting' | 'banned';
+  status: 'active' | 'connecting' | 'disconnected' | 'banned';
   type: 'official' | 'evolution';
   evolutionName?: string;
   segment?: number;
@@ -115,16 +115,24 @@ export default function Linhas() {
         evolutionService.list()
       ]);
 
-      const mappedLines: Line[] = linesData.map((l: ApiLine) => ({
-        id: String(l.id),
-        phone: l.phone,
-        status: (l.lineStatus === 'active' ? 'active' : (l.lineStatus === 'connecting' ? 'connecting' : 'banned')) as 'active' | 'connecting' | 'banned',
-        type: (l.oficial ? 'official' : 'evolution') as 'official' | 'evolution',
-        evolutionName: l.evolutionName,
-        segment: l.segment ?? undefined,
-        segmentName: l.segmentName ?? null,
-        operators: l.operators || []
-      }));
+      const mappedLines: Line[] = linesData.map((l: ApiLine) => {
+        let status: 'active' | 'connecting' | 'disconnected' | 'banned';
+        if (l.lineStatus === 'active') status = 'active';
+        else if (l.lineStatus === 'connecting') status = 'connecting';
+        else if (l.lineStatus === 'disconnected') status = 'disconnected';
+        else status = 'banned';
+
+        return {
+          id: String(l.id),
+          phone: l.phone,
+          status,
+          type: (l.oficial ? 'official' : 'evolution') as 'official' | 'evolution',
+          evolutionName: l.evolutionName,
+          segment: l.segment ?? undefined,
+          segmentName: l.segmentName ?? null,
+          operators: l.operators || []
+        };
+      });
       setAllLines(mappedLines);
 
       // Aplicar filtro local se necessário
@@ -160,9 +168,11 @@ export default function Linhas() {
             ? "bg-success"
             : line.status === 'connecting'
               ? "bg-yellow-500"
-              : "bg-destructive"
+              : line.status === 'disconnected'
+                ? "bg-orange-500"
+                : "bg-destructive"
         }>
-          {line.status === 'active' ? "Ativa" : line.status === 'connecting' ? "Em Conexão" : "Banida"}
+          {line.status === 'active' ? "Ativa" : line.status === 'connecting' ? "Em Conexão" : line.status === 'disconnected' ? "Desconectada" : "Banida"}
         </Badge>
       )
     },
@@ -489,6 +499,7 @@ export default function Linhas() {
             <SelectContent>
               <SelectItem value="connecting">Em Conexão</SelectItem>
               <SelectItem value="active">Ativa</SelectItem>
+              <SelectItem value="disconnected">Desconectada</SelectItem>
               <SelectItem value="ban">Banida</SelectItem>
             </SelectContent>
           </Select>
@@ -591,6 +602,7 @@ export default function Linhas() {
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="active">Ativas</SelectItem>
                   <SelectItem value="connecting">Em Conexão</SelectItem>
+                  <SelectItem value="disconnected">Desconectadas</SelectItem>
                   <SelectItem value="banned">Banidas</SelectItem>
                 </SelectContent>
               </Select>

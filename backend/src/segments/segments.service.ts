@@ -7,7 +7,7 @@ import { Readable } from 'stream';
 
 @Injectable()
 export class SegmentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(createSegmentDto: CreateSegmentDto) {
     const existing = await this.prisma.segment.findUnique({
@@ -50,12 +50,110 @@ export class SegmentsService {
   }
 
   async update(id: number, updateSegmentDto: UpdateSegmentDto) {
-    await this.findOne(id);
+    const segment = await this.findOne(id);
 
-    return this.prisma.segment.update({
+    // Atualizar segmento primeiro
+    const updatedSegment = await this.prisma.segment.update({
       where: { id },
       data: updateSegmentDto,
     });
+
+    // Se maxOperatorsPerLine foi alterado, aplicar limite às linhas existentes
+    if (updateSegmentDto.maxOperatorsPerLine !== undefined &&
+      updateSegmentDto.maxOperatorsPerLine !== segment.maxOperatorsPerLine) {
+      await this.enforceOperatorLimitForSegment(id, updateSegmentDto.maxOperatorsPerLine);
+    }
+
+    return updatedSegment;
+  }
+
+  /**
+   * Garante que todas as linhas de um segmento respeitem o limite máximo de operadores.
+   * Remove operadores excedentes aleatoriamente e os adiciona à fila para realocação.
+   */
+  async enforceOperatorLimitForSegment(segmentId: number, maxOperators: number) {
+    console.log(`🔧 [SegmentsService] Aplicando limite de ${maxOperators} operador(es) por linha ao segmento ${segmentId}`);
+
+    // Buscar todas as linhas do segmento com seus operadores
+    const linesInSegment = await this.prisma.linesStock.findMany({
+      where: {
+        segment: segmentId,
+        lineStatus: 'active',
+      },
+      include: {
+        operators: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    let totalOperatorsRemoved = 0;
+
+    for (const line of linesInSegment) {
+      const currentOperatorCount = line.operators.length;
+
+      if (currentOperatorCount > maxOperators) {
+        const excessCount = currentOperatorCount - maxOperators;
+        console.log(`📋 [SegmentsService] Linha ${line.phone}: ${currentOperatorCount} operadores, removendo ${excessCount}`);
+
+        // Selecionar operadores para manter (aleatório) - embaralhar e pegar os primeiros N
+        const shuffledOperators = [...line.operators].sort(() => Math.random() - 0.5);
+        const operatorsToRemove = shuffledOperators.slice(maxOperators);
+
+        for (const lineOperator of operatorsToRemove) {
+          // Remover vínculo
+          await this.prisma.lineOperator.delete({
+            where: { id: lineOperator.id },
+          });
+
+          // Limpar campo legacy
+          await this.prisma.user.update({
+            where: { id: lineOperator.userId },
+            data: { line: null },
+          });
+
+          console.log(`🔗 [SegmentsService] Operador ${lineOperator.user?.name || lineOperator.userId} desvinculado da linha ${line.phone}`);
+
+          // Se operador está online, adicionar à fila para realocação
+          if (lineOperator.user?.status === 'Online') {
+            // Verificar se já está na fila
+            const existingEntry = await this.prisma.operatorQueue.findFirst({
+              where: { userId: lineOperator.userId },
+            });
+
+            if (!existingEntry) {
+              await this.prisma.operatorQueue.create({
+                data: {
+                  userId: lineOperator.userId,
+                  segmentId: lineOperator.user.segment,
+                  priority: 1,
+                },
+              });
+              console.log(`📋 [SegmentsService] Operador ${lineOperator.user?.name} adicionado à fila de realocação`);
+            }
+          }
+
+          totalOperatorsRemoved++;
+        }
+
+        // Atualizar linkedTo (campo legacy) - manter o primeiro operador que ficou
+        const remainingOperator = shuffledOperators[0];
+        await this.prisma.linesStock.update({
+          where: { id: line.id },
+          data: { linkedTo: remainingOperator?.userId || null },
+        });
+      }
+    }
+
+    if (totalOperatorsRemoved > 0) {
+      console.log(`✅ [SegmentsService] Limite aplicado: ${totalOperatorsRemoved} operador(es) removido(s) no segmento ${segmentId}`);
+    } else {
+      console.log(`✅ [SegmentsService] Nenhum operador precisou ser removido no segmento ${segmentId}`);
+    }
+
+    return totalOperatorsRemoved;
   }
 
   async remove(id: number) {
@@ -78,7 +176,7 @@ export class SegmentsService {
 
     return new Promise((resolve, reject) => {
       const stream = Readable.from(file.buffer.toString('utf-8'));
-      
+
       stream
         .pipe(csv({ separator: ';' }))
         .on('data', (data) => {

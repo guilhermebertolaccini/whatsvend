@@ -838,6 +838,263 @@ export class LinesService {
     console.log(`✅ [handleBannedLine] Linha ${lineId} marcada como banida e operadores desvinculados`);
   }
 
+  // Lógica para linhas temporariamente desconectadas
+  async handleDisconnectedLine(lineId: number) {
+    const line = await this.findOne(lineId);
+
+    // Buscar todos os operadores vinculados à linha (tabela LineOperator)
+    const lineOperators = await this.prisma.lineOperator.findMany({
+      where: { lineId },
+      include: {
+        user: true,
+      },
+    });
+
+    const operatorIds = lineOperators.map(lo => lo.userId);
+
+    // Marcar linha como desconectada
+    await this.update(lineId, { lineStatus: 'disconnected' });
+
+    // Registrar evento de linha desconectada
+    await this.systemEventsService.logEvent(
+      EventType.LINE_DISCONNECTED,
+      EventModule.LINES,
+      {
+        lineId: line.id,
+        linePhone: line.phone,
+        operatorsCount: lineOperators.length,
+      },
+      null,
+      EventSeverity.WARNING,
+    );
+
+    if (operatorIds.length > 0) {
+      console.log(`🔄 [handleDisconnectedLine] Desvinculando ${operatorIds.length} operador(es) da linha desconectada ${lineId}`);
+
+      // Buscar conversas ativas (não tabuladas) da linha desconectada, agrupadas por operador
+      const activeConversations = await this.prisma.conversation.findMany({
+        where: {
+          userLine: lineId,
+          tabulation: null, // Apenas conversas ativas
+          userId: { in: operatorIds }, // Apenas dos operadores desta linha
+        },
+        select: {
+          contactPhone: true,
+          contactName: true,
+          userId: true,
+        },
+        distinct: ['contactPhone', 'userId'], // Evitar duplicatas
+      });
+
+      // Agrupar contatos por operador
+      const contactsByOperator = new Map<number, Array<{ phone: string; name: string }>>();
+      activeConversations.forEach(conv => {
+        if (conv.userId) {
+          if (!contactsByOperator.has(conv.userId)) {
+            contactsByOperator.set(conv.userId, []);
+          }
+          contactsByOperator.get(conv.userId)!.push({
+            phone: conv.contactPhone,
+            name: conv.contactName,
+          });
+        }
+      });
+
+      // Desvincular todos os operadores da tabela LineOperator
+      await this.prisma.lineOperator.deleteMany({
+        where: { lineId },
+      });
+
+      // Atualizar campos legacy (line e linkedTo)
+      for (const operatorId of operatorIds) {
+        await this.prisma.user.update({
+          where: { id: operatorId },
+          data: { line: null },
+        });
+      }
+
+      // Limpar linkedTo da linha desconectada
+      await this.prisma.linesStock.update({
+        where: { id: lineId },
+        data: { linkedTo: null },
+      });
+
+      // Tentar atribuir novas linhas aos operadores desvinculados
+      for (const operatorId of operatorIds) {
+        const operator = await this.prisma.user.findUnique({
+          where: { id: operatorId },
+          include: { lineOperators: true },
+        });
+
+        if (!operator || operator.lineOperators.length > 0) {
+          continue; // Operador já tem outra linha ou não existe
+        }
+
+        // 1. Primeiro, tentar buscar linha do mesmo segmento do operador
+        let availableLines = await this.prisma.linesStock.findMany({
+          where: {
+            lineStatus: 'active',
+            segment: operator.segment || line.segment,
+          },
+          include: {
+            operators: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        });
+
+        // Filtrar linhas que ainda têm slots disponíveis (menos de 2 operadores)
+        let availableLine = availableLines.find(l => l.operators.length < 2);
+
+        // 2. Se não encontrar no segmento do operador, buscar no segmento "Padrão"
+        if (!availableLine) {
+          const defaultSegment = await this.prisma.segment.findUnique({
+            where: { name: 'Padrão' },
+          });
+
+          if (defaultSegment) {
+            const defaultLines = await this.prisma.linesStock.findMany({
+              where: {
+                lineStatus: 'active',
+                segment: defaultSegment.id,
+              },
+              include: {
+                operators: {
+                  include: {
+                    user: true,
+                  },
+                },
+              },
+            });
+
+            availableLine = defaultLines.find(l => l.operators.length < 2);
+
+            // Se encontrou linha padrão, atribuir ao segmento do operador
+            if (availableLine && operator.segment) {
+              await this.prisma.linesStock.update({
+                where: { id: availableLine.id },
+                data: { segment: operator.segment },
+              });
+              console.log(`🔄 [handleDisconnectedLine] Linha padrão ${availableLine.phone} atribuída ao segmento do operador (ID: ${operator.segment})`);
+            }
+          }
+        }
+
+        if (availableLine) {
+          // Criar vínculo na tabela LineOperator
+          await this.prisma.lineOperator.create({
+            data: {
+              lineId: availableLine.id,
+              userId: operatorId,
+            },
+          });
+
+          // Atualizar campo legacy line
+          await this.prisma.user.update({
+            where: { id: operatorId },
+            data: { line: availableLine.id },
+          });
+
+          // Atualizar linkedTo (campo legacy)
+          await this.prisma.linesStock.update({
+            where: { id: availableLine.id },
+            data: { linkedTo: operatorId },
+          });
+
+          console.log(`✅ [handleDisconnectedLine] Linha ${availableLine.phone} atribuída ao operador ${operator.name} (ID: ${operatorId})`);
+
+          // Atualizar conversas ativas do operador para usar a nova linha
+          const operatorContacts = contactsByOperator.get(operatorId) || [];
+          for (const contact of operatorContacts) {
+            await this.prisma.conversation.updateMany({
+              where: {
+                contactPhone: contact.phone,
+                userId: operatorId,
+                tabulation: null,
+              },
+              data: { userLine: availableLine.id },
+            });
+          }
+          console.log(`🔄 [handleDisconnectedLine] Conversas do operador ${operator.name} atualizadas para usar a nova linha ${availableLine.phone}`);
+        } else {
+          // Não encontrou linha de substituição
+          console.warn(`⚠️ [handleDisconnectedLine] Nenhuma linha disponível para substituir a linha desconectada para o operador ${operator?.name || operatorId}`);
+
+          // Fechar conversas ativas do operador
+          const operatorContacts = contactsByOperator.get(operatorId) || [];
+          if (operatorContacts.length > 0) {
+            try {
+              await this.prisma.conversation.updateMany({
+                where: {
+                  contactPhone: { in: operatorContacts.map(c => c.phone) },
+                  userId: operatorId,
+                  tabulation: null,
+                },
+                data: { tabulation: 'Sem linha disponível' },
+              });
+              console.log(`🔄 [handleDisconnectedLine] Conversas ativas do operador ${operator?.name || operatorId} foram fechadas`);
+            } catch (error) {
+              console.error(`❌ [handleDisconnectedLine] Erro ao fechar conversas:`, error);
+            }
+          }
+
+          // Notificar operador via WebSocket
+          try {
+            this.websocketGateway.sendToUser(operatorId, 'line_disconnected', {
+              message: 'Sua linha foi desconectada. Aguarde uma nova linha ser atribuída ou contate um supervisor.',
+              lineId: lineId,
+            });
+          } catch (error) {
+            console.error(`❌ [handleDisconnectedLine] Erro ao notificar operador:`, error);
+          }
+
+          console.log(`📋 [handleDisconnectedLine] Operador ${operator?.name || operatorId} precisa de nova linha, mas nenhuma disponível no momento`);
+        }
+      }
+    } else if (line.linkedTo) {
+      // Verificar campo legacy linkedTo
+      const operatorId = line.linkedTo;
+
+      await this.prisma.user.update({
+        where: { id: operatorId },
+        data: { line: null },
+      });
+
+      await this.prisma.linesStock.update({
+        where: { id: lineId },
+        data: { linkedTo: null },
+      });
+
+      // Buscar e atribuir nova linha
+      const availableLines = await this.prisma.linesStock.findMany({
+        where: {
+          lineStatus: 'active',
+          segment: line.segment,
+          linkedTo: null,
+        },
+      });
+
+      const availableLine = availableLines[0];
+      if (availableLine) {
+        await this.prisma.user.update({
+          where: { id: operatorId },
+          data: { line: availableLine.id },
+        });
+        await this.prisma.linesStock.update({
+          where: { id: availableLine.id },
+          data: { linkedTo: operatorId },
+        });
+        console.log(`✅ [handleDisconnectedLine] Linha ${availableLine.phone} atribuída ao operador ${line.linkedTo} (legacy)`);
+      } else {
+        console.warn(`⚠️ [handleDisconnectedLine] Nenhuma linha disponível para substituir a linha desconectada`);
+      }
+    }
+
+    console.log(`✅ [handleDisconnectedLine] Linha ${lineId} marcada como desconectada e operadores desvinculados`);
+  }
+
   async getAvailableLines(segment: number) {
     return this.prisma.linesStock.findMany({
       where: {
@@ -874,10 +1131,17 @@ export class LinesService {
       },
     });
 
+    // Buscar configuração do segmento do operador
+    const operatorSegment = operator.segment ? await this.prisma.segment.findUnique({
+      where: { id: operator.segment },
+      select: { maxOperatorsPerLine: true },
+    }) : null;
+    const maxOperatorsPerLine = operatorSegment?.maxOperatorsPerLine ?? 2;
+
     // No modo compartilhado, não filtrar por quantidade de operadores
     if (!sharedLineMode) {
-      // Filtrar linhas com menos de 2 operadores
-      availableLines = availableLines.filter(l => l.operators.length < 2);
+      // Filtrar linhas usando o limite do segmento
+      availableLines = availableLines.filter(l => l.operators.length < maxOperatorsPerLine);
     }
 
     // Se não encontrou linhas do segmento, buscar linhas sem segmento (padrão)
@@ -894,7 +1158,7 @@ export class LinesService {
 
       // No modo compartilhado, não filtrar por quantidade de operadores
       if (!sharedLineMode) {
-        availableLines = defaultLines.filter(l => l.operators.length < 2);
+        availableLines = defaultLines.filter(l => l.operators.length < maxOperatorsPerLine);
       } else {
         availableLines = defaultLines;
       }

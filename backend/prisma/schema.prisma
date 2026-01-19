@@ -24,6 +24,7 @@ enum Status {
 enum LineStatus {
   connecting
   active
+  disconnected
   ban
 }
 
@@ -74,14 +75,15 @@ model User {
 }
 
 model Segment {
-  id               Int      @id @default(autoincrement())
-  name             String   @unique
-  allowsFreeMessage Boolean @default(true) // Se true, permite mensagens livres no 1x1. Se false, só permite templates.
-  identifier       Identifier @default(proprietario) // cliente ou proprietario - usado para filtrar relatórios
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                  Int        @id @default(autoincrement())
+  name                String     @unique
+  allowsFreeMessage   Boolean    @default(true) // Se true, permite mensagens livres no 1x1. Se false, só permite templates.
+  identifier          Identifier @default(proprietario) // cliente ou proprietario - usado para filtrar relatórios
+  maxOperatorsPerLine Int        @default(2) // Máximo de operadores por linha neste segmento
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
-  queueEntries     OperatorQueue[] @relation("OperatorQueueSegment") // Entradas na fila de espera deste segmento
+  queueEntries        OperatorQueue[] @relation("OperatorQueueSegment") // Entradas na fila de espera deste segmento
 
   @@index([name])
   @@index([identifier])

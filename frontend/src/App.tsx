@@ -31,6 +31,7 @@ import OperadoresOnline from "./pages/OperadoresOnline";
 import NotFound from "./pages/NotFound";
 import RelatorioVidaUtil from "./pages/RelatorioVidaUtil";
 import RelatorioAlocacoes from "./pages/RelatorioAlocacoes";
+import RegrasAlocacao from "./pages/RegrasAlocacao";
 
 const queryClient = new QueryClient();
 
@@ -107,6 +108,7 @@ function AppRoutes() {
       <Route path="/operadores-online" element={<ProtectedRoute><OperadoresOnline /></ProtectedRoute>} />
       <Route path="/relatorios/vida-util" element={<ProtectedRoute><RelatorioVidaUtil /></ProtectedRoute>} />
       <Route path="/relatorios/alocacoes" element={<ProtectedRoute><RelatorioAlocacoes /></ProtectedRoute>} />
+      <Route path="/regras-alocacao" element={<ProtectedRoute><RegrasAlocacao /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

@@ -24,7 +24,7 @@ export class WebhooksService {
     private controlPanelService: ControlPanelService,
     private blocklistService: BlocklistService,
     private systemEventsService: SystemEventsService,
-  ) {}
+  ) { }
 
   async handleEvolutionMessage(data: any) {
     try {
@@ -47,12 +47,12 @@ export class WebhooksService {
         // Verificar se é mensagem de grupo
         const isGroup = message.key.remoteJid?.includes('@g.us') || false;
         const groupId = isGroup ? message.key.remoteJid : null;
-        
+
         // Para grupos, extrair informações do grupo e do participante
         let from: string;
         let groupName: string | null = null;
         let participantName: string | null = null;
-        
+
         if (isGroup) {
           // Em grupos, o remoteJid é o ID do grupo
           from = groupId || '';
@@ -136,13 +136,13 @@ export class WebhooksService {
         if (line.receiveMedia && messageType !== 'text') {
           console.log('🔍 [Webhook] Tentando extrair mídia Base64...');
           const base64Media = this.extractBase64Media(message.message);
-          
+
           if (base64Media) {
             console.log('✅ [Webhook] Base64 encontrado, mimetype:', base64Media.mimetype);
             try {
               const fileName = `${Date.now()}-${from}-${messageType}.${this.getExtension(messageType, base64Media.mimetype)}`;
               const localFileName = await this.saveBase64Media(base64Media.data, fileName, base64Media.mimetype);
-              
+
               if (localFileName) {
                 mediaUrl = `/media/${localFileName}`;
                 console.log('📥 Mídia Base64 salva localmente:', mediaUrl);
@@ -157,7 +157,7 @@ export class WebhooksService {
               try {
                 const fileName = `${Date.now()}-${from}-${messageType}.${this.getExtension(messageType)}`;
                 const localFileName = await this.mediaService.downloadMediaFromEvolution(mediaUrl, fileName);
-                
+
                 if (localFileName) {
                   mediaUrl = `/media/${localFileName}`;
                   console.log('📥 Mídia URL salva localmente:', mediaUrl);
@@ -175,7 +175,7 @@ export class WebhooksService {
           try {
             const fileName = `${Date.now()}-${from}-${messageType}.${this.getExtension(messageType)}`;
             const localFileName = await this.mediaService.downloadMediaFromEvolution(mediaUrl, fileName);
-            
+
             if (localFileName) {
               mediaUrl = `/media/${localFileName}`;
               console.log('📥 Mídia salva localmente:', mediaUrl);
@@ -256,11 +256,11 @@ export class WebhooksService {
         let blockedByPhrase = false;
         if (!isGroup) {
           const isBlockPhrase = await this.controlPanelService.checkBlockPhrases(messageText, line.segment);
-          
+
           if (isBlockPhrase) {
             console.log('🚫 Frase de bloqueio detectada:', messageText);
             blockedByPhrase = true;
-            
+
             // Adicionar à blocklist
             await this.blocklistService.create({
               name: contact.name,
@@ -279,15 +279,15 @@ export class WebhooksService {
         // Distribuir mensagem entre os operadores da linha
         // No modo compartilhado, atribuir para todos os usuários da linha
         let finalOperatorId: number | null = null;
-        
+
         if (sharedLineMode && isGroup) {
           // No modo compartilhado com grupos, atribuir para o primeiro operador/admin online da linha
           // Mas a mensagem será enviada para todos via WebSocket
-          const anyOnlineUser = line.operators.find(lo => 
-            lo.user.status === 'Online' && 
+          const anyOnlineUser = line.operators.find(lo =>
+            lo.user.status === 'Online' &&
             (lo.user.role === 'operator' || lo.user.role === 'admin' || lo.user.role === 'supervisor')
           );
-          
+
           if (anyOnlineUser) {
             finalOperatorId = anyOnlineUser.userId;
             console.log(`✅ [Webhook] Modo compartilhado: atribuindo grupo para ${anyOnlineUser.user.name} (ID: ${finalOperatorId})`);
@@ -302,11 +302,11 @@ export class WebhooksService {
         // Se não encontrou operador, tentar encontrar qualquer operador/admin online da linha
         if (!finalOperatorId && line.operators && line.operators.length > 0) {
           // Buscar qualquer usuário online da linha (operador, admin ou supervisor)
-          const anyOnlineUser = line.operators.find(lo => 
-            lo.user.status === 'Online' && 
+          const anyOnlineUser = line.operators.find(lo =>
+            lo.user.status === 'Online' &&
             (lo.user.role === 'operator' || lo.user.role === 'admin' || lo.user.role === 'supervisor')
           );
-          
+
           if (anyOnlineUser) {
             finalOperatorId = anyOnlineUser.userId;
             console.log(`✅ [Webhook] Atribuindo mensagem a usuário online disponível: ${anyOnlineUser.user.name} (ID: ${finalOperatorId})`);
@@ -318,7 +318,7 @@ export class WebhooksService {
         // Se ainda não encontrou operador online, adicionar à fila de mensagens
         if (!finalOperatorId) {
           console.log(`📥 [Webhook] Nenhum operador online, adicionando mensagem à fila...`);
-          
+
           // Adicionar à fila de mensagens
           await (this.prisma as any).messageQueue.create({
             data: {
@@ -346,7 +346,7 @@ export class WebhooksService {
             null,
             EventSeverity.WARNING,
           );
-          
+
           return { status: 'queued', message: 'Mensagem adicionada à fila (nenhum operador online)' };
         }
 
@@ -424,7 +424,7 @@ export class WebhooksService {
           ...conversation,
           blockedByPhrase,
         };
-        
+
         await this.websocketGateway.emitNewMessage(messagePayload);
 
         return { status: 'success', conversation, blockedByPhrase };
@@ -435,7 +435,6 @@ export class WebhooksService {
         const state = data.data?.state || data.state;
 
         if (state === 'close' || state === 'DISCONNECTED') {
-          // Linha foi desconectada/banida
           const instanceName = data.instance || data.instanceName;
           const phoneNumber = instanceName?.replace('line_', '');
 
@@ -448,11 +447,28 @@ export class WebhooksService {
           });
 
           if (line) {
-            // Marcar como banida e trocar automaticamente
-            await this.linesService.handleBannedLine(line.id);
+            // Analisar motivo da desconexão para diferenciar banimento de desconexão temporária
+            const reason = data.data?.reason || data.reason || '';
+            const reasonLower = typeof reason === 'string' ? reason.toLowerCase() : String(reason).toLowerCase();
+
+            // Motivos que indicam banimento permanente
+            const bannedReasons = ['403', 'conflict', 'banned', 'loggedout', 'logged out', 'deleted'];
+            const isBanned = bannedReasons.some(r => reasonLower.includes(r));
+
+            console.log(`🔌 [Webhook] Linha ${line.phone} desconectada. Motivo: "${reason}" | Banida: ${isBanned}`);
+
+            if (isBanned) {
+              // Linha permanentemente banida
+              await this.linesService.handleBannedLine(line.id);
+              return { status: 'line_banned', lineId: line.id, reason };
+            } else {
+              // Desconexão temporária (timeout, connectionLost, etc.)
+              await this.linesService.handleDisconnectedLine(line.id);
+              return { status: 'line_disconnected', lineId: line.id, reason };
+            }
           }
 
-          return { status: 'line_disconnected', lineId: line?.id };
+          return { status: 'line_not_found', phoneNumber };
         }
 
         // Linha conectada (QRCODE escaneado)
@@ -558,7 +574,7 @@ export class WebhooksService {
                   await this.linesService.assignOperatorToLine(line.id, operatorWithoutLine.id);
 
                   console.log(`✅ [Webhook] Linha ${line.phone} vinculada automaticamente ao operador ${operatorWithoutLine.name} (segmento ${line.segment || 'sem segmento'})`);
-                  
+
                   // Notificar via WebSocket
                   this.websocketGateway.emitToUser(operatorWithoutLine.id, 'line-assigned', {
                     lineId: line.id,
@@ -872,7 +888,7 @@ export class WebhooksService {
     for (const type of mediaTypes) {
       if (message?.[type]) {
         const mediaMsg = message[type];
-        
+
         console.log(`🔍 [Webhook] Verificando ${type}:`, {
           hasBase64: !!mediaMsg.base64,
           hasMedia: !!mediaMsg.media,
@@ -880,7 +896,7 @@ export class WebhooksService {
           mimetype: mediaMsg.mimetype,
           keys: Object.keys(mediaMsg),
         });
-        
+
         // A Evolution API pode enviar base64 em diferentes formatos
         // Formato 1: { base64: "...", mimetype: "..." }
         if (mediaMsg.base64) {
@@ -930,13 +946,13 @@ export class WebhooksService {
     try {
       // Remover prefixo data:xxx;base64, se existir
       const base64Clean = base64Data.replace(/^data:[^;]+;base64,/, '');
-      
+
       const buffer = Buffer.from(base64Clean, 'base64');
       const filePath = path.join(this.uploadsDir, fileName);
-      
+
       await fs.mkdir(this.uploadsDir, { recursive: true });
       await fs.writeFile(filePath, buffer);
-      
+
       console.log(`📁 Arquivo Base64 salvo: ${fileName} (${buffer.length} bytes)`);
       return fileName;
     } catch (error) {
