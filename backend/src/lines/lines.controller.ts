@@ -61,13 +61,13 @@ export class LinesController {
   }
 
   @Get('allocations-log')
-  @Roles(Role.admin, Role.supervisor)
+  @Roles(Role.admin)
   getAllocationsLog(@Query('limit') limit: number) {
     return this.linesService.getAllocationsLog(limit ? Number(limit) : 50);
   }
 
   @Get('lifespan')
-  @Roles(Role.admin, Role.supervisor, Role.ativador)
+  @Roles(Role.admin)
   getLineLifespan() {
     return this.linesService.getLineLifespan();
   }

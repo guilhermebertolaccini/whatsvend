@@ -144,14 +144,14 @@ const menuItems: MenuItem[] = [
     url: "/relatorios/vida-util",
     icon: Clock,
     color: "text-cyan",
-    roles: ["admin", "supervisor", "ativador"],
+    roles: ["admin"],
   },
   {
     title: "Log Alocações",
     url: "/relatorios/alocacoes",
     icon: Activity,
     color: "text-green-500",
-    roles: ["admin", "supervisor"],
+    roles: ["admin"],
   },
   {
     title: "Usuários",
