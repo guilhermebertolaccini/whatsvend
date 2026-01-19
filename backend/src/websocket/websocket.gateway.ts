@@ -374,6 +374,16 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
               // Adicionar operador à fila de espera
               await this.queueService.addToQueue(user.id, user.segment || null, 0);
               console.log(`📋 [WebSocket] Operador ${user.name} adicionado à fila de espera`);
+
+              // Processar fila IMEDIATAMENTE para tentar alocar linha (otimização de velocidade)
+              setImmediate(async () => {
+                try {
+                  await this.queueService.processQueue();
+                  console.log(`⚡ [WebSocket] Fila processada imediatamente para operador ${user.name}`);
+                } catch (error) {
+                  console.error(`❌ [WebSocket] Erro ao processar fila imediata:`, error.message);
+                }
+              });
             }
           }
         }

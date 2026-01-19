@@ -1177,54 +1177,9 @@ export class LinesService {
         throw new BadRequestException(`Linha da evolution '${line.evolutionName}' não está ativa para atribuição`);
       }
 
-      // NOVA VALIDAÇÃO: Verificar se a linha está realmente conectada no WhatsApp (Evolution API)
-      const evolution = await tx.evolution.findUnique({
-        where: { evolutionName: line.evolutionName },
-      });
-
-      if (evolution) {
-        const instanceName = `line_${line.phone.replace(/\D/g, '')}`;
-
-        try {
-          const connectionStatus = await this.healthCheckCacheService.getConnectionStatus(
-            evolution.evolutionUrl,
-            evolution.evolutionKey,
-            instanceName
-          );
-
-          // BLOQUEAR apenas status explicitamente desconectados ou conectando
-          // Status 'unknown' é permitido (pode ser cache ou problema temporário da API)
-          const isDisconnected = connectionStatus === 'close' ||
-            connectionStatus === 'CLOSE' ||
-            connectionStatus === 'disconnected' ||
-            connectionStatus === 'DISCONNECTED' ||
-            connectionStatus === 'closeTimeout';
-
-          const isConnecting = connectionStatus === 'connecting' ||
-            connectionStatus === 'CONNECTING';
-
-          if (isDisconnected) {
-            throw new BadRequestException(`Linha ${line.phone} está desconectada (${connectionStatus}). Não é possível vincular ao operador.`);
-          }
-
-          if (isConnecting) {
-            throw new BadRequestException(`Linha ${line.phone} está se conectando (${connectionStatus}). Aguarde a conexão ser estabelecida antes de vincular.`);
-          }
-
-          // Se chegou aqui, status é 'open', 'connected' ou 'unknown' - todos permitidos
-          console.log(`✅ [assignOperatorToLine] Linha ${line.phone} validada (status: ${connectionStatus})`);
-        } catch (healthError: any) {
-          // Se já for um BadRequestException, relançar
-          if (healthError instanceof BadRequestException) {
-            throw healthError;
-          }
-
-          // Se for erro de comunicação com a API, informar
-          console.error(`❌ [assignOperatorToLine] Erro ao verificar status da linha ${line.phone}:`, healthError.message);
-          throw new BadRequestException(`Não foi possível verificar o status de conexão da linha ${line.phone}. Tente novamente.`);
-        }
-
-      }
+      // NOTA: Verificação de conexão na Evolution API foi removida para alocação mais rápida
+      // O sistema agora confia apenas no lineStatus do banco de dados
+      console.log(`✅ [assignOperatorToLine] Linha ${line.phone} validada (status banco: ${line.lineStatus})`);
 
       // Buscar informações do operador (usuário)
       const operator = await tx.user.findUnique({

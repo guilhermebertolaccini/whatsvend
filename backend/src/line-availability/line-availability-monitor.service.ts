@@ -49,7 +49,7 @@ export class LineAvailabilityMonitorService {
     private healthCheckCacheService: HealthCheckCacheService,
     private lineAssignmentService: LineAssignmentService,
     private logger: AppLoggerService,
-  ) {}
+  ) { }
 
   /**
    * Cron job: Verificar disponibilidade a cada 1 minuto
@@ -143,71 +143,71 @@ export class LineAvailabilityMonitorService {
 
           // Se linha está banida ou desconectada, realocar
           if (!lineStatus || lineStatus === 'ban' || lineStatus === 'disconnected' || lineStatus.toLowerCase() === 'ban' || lineStatus.toLowerCase() === 'disconnected') {
-          this.logger.warn(
-            `Linha ${line.phone} está ${lineStatus || 'desconectada'} na Evolution. Realocando para operador ${operator.name}...`,
-            'LineAvailability',
-            {
-              operatorId: operator.id,
-              operatorName: operator.name,
-              lineId: line.id,
-              linePhone: line.phone,
-              lineStatus: lineStatus || 'unknown',
-            },
-          );
-
-          try {
-            // Realocar nova linha (mesma regra: mesmo segmento ou "Padrão")
-            // A função reallocateLineForOperator vai desvincular e marcar a linha como banida
-            const reallocationResult = await this.lineAssignmentService.reallocateLineForOperator(
-              operator.id,
-              operator.segment || null,
-              line.id, // oldLineId - linha banida
-              undefined, // traceId
-              true // markAsBanned = true - marca linha como banida e desvincula TODOS os operadores
+            this.logger.warn(
+              `Linha ${line.phone} está ${lineStatus || 'desconectada'} na Evolution. Realocando para operador ${operator.name}...`,
+              'LineAvailability',
+              {
+                operatorId: operator.id,
+                operatorName: operator.name,
+                lineId: line.id,
+                linePhone: line.phone,
+                lineStatus: lineStatus || 'unknown',
+              },
             );
 
-            if (reallocationResult.success && reallocationResult.lineId) {
-              const newLine = await this.prisma.linesStock.findUnique({
-                where: { id: reallocationResult.lineId },
-              });
+            try {
+              // Realocar nova linha (mesma regra: mesmo segmento ou "Padrão")
+              // A função reallocateLineForOperator vai desvincular e marcar a linha como banida
+              const reallocationResult = await this.lineAssignmentService.reallocateLineForOperator(
+                operator.id,
+                operator.segment || null,
+                line.id, // oldLineId - linha banida
+                undefined, // traceId
+                true // markAsBanned = true - marca linha como banida e desvincula TODOS os operadores
+              );
 
-              if (newLine) {
-                this.logger.log(
-                  `Linha ${newLine.phone} realocada automaticamente para operador ${operator.name} após detectar linha banida`,
+              if (reallocationResult.success && reallocationResult.lineId) {
+                const newLine = await this.prisma.linesStock.findUnique({
+                  where: { id: reallocationResult.lineId },
+                });
+
+                if (newLine) {
+                  this.logger.log(
+                    `Linha ${newLine.phone} realocada automaticamente para operador ${operator.name} após detectar linha banida`,
+                    'LineAvailability',
+                    {
+                      operatorId: operator.id,
+                      operatorName: operator.name,
+                      oldLineId: line.id,
+                      oldLinePhone: line.phone,
+                      newLineId: newLine.id,
+                      newLinePhone: newLine.phone,
+                    },
+                  );
+                } else {
+                  this.logger.error(
+                    `Linha ${reallocationResult.lineId} não encontrada após realocação para operador ${operator.name}`,
+                    '',
+                    'LineAvailability',
+                    {
+                      operatorId: operator.id,
+                      lineId: reallocationResult.lineId,
+                    },
+                  );
+                }
+              } else {
+                this.logger.error(
+                  `Não foi possível realocar linha para operador ${operator.name}: ${reallocationResult.reason}`,
+                  '',
                   'LineAvailability',
                   {
                     operatorId: operator.id,
                     operatorName: operator.name,
                     oldLineId: line.id,
-                    oldLinePhone: line.phone,
-                    newLineId: newLine.id,
-                    newLinePhone: newLine.phone,
-                  },
-                );
-              } else {
-                this.logger.error(
-                  `Linha ${reallocationResult.lineId} não encontrada após realocação para operador ${operator.name}`,
-                  '',
-                  'LineAvailability',
-                  {
-                    operatorId: operator.id,
-                    lineId: reallocationResult.lineId,
+                    reason: reallocationResult.reason,
                   },
                 );
               }
-            } else {
-              this.logger.error(
-                `Não foi possível realocar linha para operador ${operator.name}: ${reallocationResult.reason}`,
-                '',
-                'LineAvailability',
-                {
-                  operatorId: operator.id,
-                  operatorName: operator.name,
-                  oldLineId: line.id,
-                  reason: reallocationResult.reason,
-                },
-              );
-            }
             } catch (error: any) {
               this.logger.error(
                 `Erro ao realocar linha para operador ${operator.name}`,
@@ -233,9 +233,9 @@ export class LineAvailabilityMonitorService {
   }
 
   /**
-   * Cron job: Processar fila de operadores a cada 30 segundos
+   * Cron job: Processar fila de operadores a cada 5 segundos (otimizado para alocação rápida)
    */
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron('*/5 * * * * *') // A cada 5 segundos
   async processOperatorQueue(): Promise<void> {
     try {
       await this.queueService.processQueue();
