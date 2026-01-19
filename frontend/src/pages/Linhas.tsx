@@ -332,11 +332,12 @@ export default function Linhas() {
         });
       } else {
         const created = await linesService.create(lineData);
+        const newStatus = created.lineStatus === 'active' ? 'active' : (created.lineStatus === 'connecting' ? 'connecting' : 'banned');
         setLines([...lines, {
           id: String(created.id),
           phone: created.phone,
-          status: created.lineStatus === 'active' ? 'active' : 'banned',
-          type: created.oficial ? 'official' : 'evolution',
+          status: newStatus as 'active' | 'connecting' | 'banned',
+          type: (created.oficial ? 'official' : 'evolution') as 'official' | 'evolution',
           evolutionName: created.evolutionName,
           segment: created.segment ?? undefined
         }]);
