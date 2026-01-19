@@ -60,6 +60,18 @@ export class LinesController {
     return this.linesService.getEvolutions();
   }
 
+  @Get('allocations-log')
+  @Roles(Role.admin, Role.supervisor)
+  getAllocationsLog(@Query('limit') limit: number) {
+    return this.linesService.getAllocationsLog(limit ? Number(limit) : 50);
+  }
+
+  @Get('lifespan')
+  @Roles(Role.admin, Role.supervisor, Role.ativador)
+  getLineLifespan() {
+    return this.linesService.getLineLifespan();
+  }
+
   @Get('instances/:evolutionName')
   @Roles(Role.admin)
   getInstances(@Param('evolutionName') evolutionName: string) {

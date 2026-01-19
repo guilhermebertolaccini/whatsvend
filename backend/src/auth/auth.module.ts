@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { PrismaService } from '../prisma.service';
+import { OperatorQueueModule } from '../operator-queue/operator-queue.module';
 
 @Module({
   imports: [
@@ -18,9 +19,10 @@ import { PrismaService } from '../prisma.service';
         signOptions: { expiresIn: configService.get('JWT_EXPIRATION') },
       }),
     }),
+    OperatorQueueModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, LocalStrategy, PrismaService],
   exports: [AuthService],
 })
-export class AuthModule {}
+export class AuthModule { }

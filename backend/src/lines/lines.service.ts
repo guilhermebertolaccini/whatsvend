@@ -1157,7 +1157,7 @@ export class LinesService {
   // Usa transação + lock para evitar race conditions
   async assignOperatorToLine(lineId: number, userId: number): Promise<void> {
     // Usar transação com lock para evitar race conditions
-    return await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       // Lock na linha para evitar atribuições simultâneas
       const line = await tx.linesStock.findUnique({
         where: { id: lineId },
@@ -1331,6 +1331,53 @@ export class LinesService {
       isolationLevel: 'Serializable', // Nível mais alto de isolamento para evitar race conditions
       timeout: 10000, // 10 segundos de timeout
     });
+
+    // Registrar evento de sistema de alocação (após sucesso da transação)
+    try {
+      const line = await this.prisma.linesStock.findUnique({ where: { id: lineId } });
+      const operator = await this.prisma.user.findUnique({ where: { id: userId } });
+
+      if (line && operator) {
+        let segmentName = 'Sem Segmento';
+        if (operator.segment) {
+          const seg = await this.prisma.segment.findUnique({ where: { id: operator.segment } });
+          if (seg) segmentName = seg.name;
+        }
+
+        this.systemEventsService.logEvent(
+          EventType.LINE_ASSIGNED,
+          EventModule.LINES,
+          {
+            lineId: line.id,
+            phone: line.phone,
+            segmentName: segmentName,
+            segmentId: operator.segment
+          },
+          userId,
+          EventSeverity.SUCCESS
+        );
+      }
+    } catch (logError) {
+      console.error('Erro ao registrar evento de alocação:', logError);
+    }
+  }
+
+  async getAllocationsLog(limit: number = 100) {
+    const events = await this.systemEventsService.findEvents({
+      type: EventType.LINE_ASSIGNED,
+      limit,
+    });
+
+    return events.events.map(event => {
+      const data = event.data || {};
+      return {
+        id: event.id,
+        timestamp: event.createdAt,
+        operatorName: event.user?.name || 'Desconhecido',
+        segmentName: data.segmentName || 'N/A',
+        linePhone: data.phone || 'N/A',
+      };
+    });
   }
 
   // Desvincular operador da linha
@@ -1396,8 +1443,18 @@ export class LinesService {
     const report = await Promise.all(activators.map(async (activator) => {
       // Filtro base para linhas criadas dentro do período (se houver)
       const lineWhere: any = { createdBy: activator.id };
-      if (start) lineWhere.createdAt = { ...lineWhere.createdAt, gte: start };
-      if (end) lineWhere.createdAt = { ...lineWhere.createdAt, lte: end };
+
+      if (start || end) {
+        lineWhere.createdAt = {};
+        if (start) lineWhere.createdAt.gte = start;
+        if (end) lineWhere.createdAt.lte = end;
+      }
+
+      console.log(`📊 [Productivity] Buscando linhas para ativador ${activator.name} (${activator.id})`, {
+        start: start?.toISOString(),
+        end: end?.toISOString(),
+        where: JSON.stringify(lineWhere)
+      });
 
       // Buscar todas as linhas criadas pelo ativador no período
       const createdLines = await this.prisma.linesStock.findMany({
@@ -1410,14 +1467,20 @@ export class LinesService {
         },
       });
 
+      console.log(`📊 [Productivity] Encontradas ${createdLines.length} linhas para ${activator.name}`);
+
       // Buscar eventos de banimento no sistema para ESSE ativador (ou relacionados a suas linhas) no período
       // Usamos a tabela systemEvent para saber QUANDO a linha caiu, independente de quando foi criada
       const eventWhere: any = {
         type: 'line_banned',
         module: 'lines',
       };
-      if (start) eventWhere.createdAt = { ...eventWhere.createdAt, gte: start };
-      if (end) eventWhere.createdAt = { ...eventWhere.createdAt, lte: end };
+
+      if (start || end) {
+        eventWhere.createdAt = {};
+        if (start) eventWhere.createdAt.gte = start;
+        if (end) eventWhere.createdAt.lte = end;
+      }
 
       // Buscar eventos de banimento
       const banEvents = await (this.prisma as any).systemEvent.findMany({
@@ -1462,11 +1525,17 @@ export class LinesService {
         ? [...dailyHistory].sort((a, b) => b.banned - a.banned)[0]
         : null;
 
+      // Calcular total de linhas únicas (pelo telefone)
+      const uniquePhones = new Set(createdLines.map(l => l.phone));
+      const totalCreatedDistinct = uniquePhones.size;
+
+      console.log(`📊 [Productivity] Encontradas ${createdLines.length} linhas (total) e ${totalCreatedDistinct} linhas únicas (telefone) para ${activator.name}`);
+
       return {
         id: activator.id,
         name: activator.name,
         email: activator.email,
-        totalCreated: createdLines.length,
+        totalCreated: totalCreatedDistinct, // Usar contagem distinta
         totalBannedInRange: activatorBanEvents.length,
         currentlyActive: createdLines.filter(l => l.lineStatus === 'active').length,
         peakBanDay,
@@ -1476,6 +1545,22 @@ export class LinesService {
     }));
 
     return report.sort((a, b) => b.totalCreated - a.totalCreated);
+  }
+
+  async getLineLifespan() {
+    // Query SQL Raw para performance e formatação específica do banco
+    return this.prisma.$queryRaw`
+      SELECT 
+          ls."phone" AS "Telefone",
+          ls."lineStatus" AS "Status",
+          COALESCE(s."name", 'Sem Segmento') AS "Segmento",
+          ls."createdAt" AS "Data Criação",
+          TO_CHAR(NOW() - ls."createdAt", 'DD "dias" HH24"h" MI"m"') AS "Tempo de Vida"
+      FROM "LinesStock" ls
+      LEFT JOIN "Segment" s ON ls."segment" = s."id"
+      WHERE ls."lineStatus" = 'active'
+      ORDER BY ls."createdAt" ASC;
+    `;
   }
 
   /**

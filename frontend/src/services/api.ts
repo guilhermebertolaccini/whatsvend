@@ -324,6 +324,26 @@ export const linesService = {
     return apiRequest('/lines/allocation-stats');
   },
 
+  getLineLifespan: async (): Promise<Array<{
+    Telefone: string;
+    Status: string;
+    Segmento: string;
+    "Data Criação": string;
+    "Tempo de Vida": string;
+  }>> => {
+    return apiRequest('/lines/lifespan');
+  },
+
+  getAllocationsLog: async (limit: number = 50): Promise<Array<{
+    id: number;
+    timestamp: string;
+    operatorName: string;
+    segmentName: string;
+    linePhone: string;
+  }>> => {
+    return apiRequest(`/lines/allocations-log?limit=${limit}`);
+  },
+
   getInstances: async (evolutionName: string): Promise<Array<{ instanceName: string; status: string }>> => {
     return apiRequest(`/lines/instances/${evolutionName}`);
   },

@@ -29,6 +29,8 @@ import ProdutividadeAtivadores from "./pages/ProdutividadeAtivadores";
 import Acompanhamento from "./pages/Acompanhamento";
 import OperadoresOnline from "./pages/OperadoresOnline";
 import NotFound from "./pages/NotFound";
+import RelatorioVidaUtil from "./pages/RelatorioVidaUtil";
+import RelatorioAlocacoes from "./pages/RelatorioAlocacoes";
 
 const queryClient = new QueryClient();
 
@@ -99,6 +101,12 @@ function AppRoutes() {
       <Route path="/produtividade-ativadores" element={<ProtectedRoute><ProdutividadeAtivadores /></ProtectedRoute>} />
       <Route path="/acompanhamento" element={<ProtectedRoute><Acompanhamento /></ProtectedRoute>} />
       <Route path="/operadores-online" element={<ProtectedRoute><OperadoresOnline /></ProtectedRoute>} />
+      import RelatorioVidaUtil from "./pages/RelatorioVidaUtil";
+
+      // ... inside AppRoutes
+      <Route path="/operadores-online" element={<ProtectedRoute><OperadoresOnline /></ProtectedRoute>} />
+      <Route path="/relatorios/vida-util" element={<ProtectedRoute><RelatorioVidaUtil /></ProtectedRoute>} />
+      <Route path="/relatorios/alocacoes" element={<ProtectedRoute><RelatorioAlocacoes /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

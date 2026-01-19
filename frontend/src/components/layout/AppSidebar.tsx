@@ -22,6 +22,7 @@ import {
   TrendingUp,
   Activity,
   UserCheck,
+  Clock,
 } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -139,6 +140,20 @@ const menuItems: MenuItem[] = [
     roles: ["admin", "ativador"],
   },
   {
+    title: "Vida Útil Linhas",
+    url: "/relatorios/vida-util",
+    icon: Clock,
+    color: "text-cyan",
+    roles: ["admin", "supervisor", "ativador"],
+  },
+  {
+    title: "Log Alocações",
+    url: "/relatorios/alocacoes",
+    icon: Activity,
+    color: "text-green-500",
+    roles: ["admin", "supervisor"],
+  },
+  {
     title: "Usuários",
     url: "/usuarios",
     icon: Users,
@@ -221,7 +236,7 @@ export function AppSidebar() {
                       "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
                       "hover:bg-sidebar-accent/20",
                       isActive &&
-                        "bg-gradient-to-r from-primary/20 to-cyan/10 text-sidebar-foreground"
+                      "bg-gradient-to-r from-primary/20 to-cyan/10 text-sidebar-foreground"
                     )}
                   >
                     <Icon className={cn("w-5 h-5", item.color)} />
