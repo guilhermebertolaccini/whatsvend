@@ -1022,27 +1022,15 @@ export class LinesService {
           // Não encontrou linha de substituição
           console.warn(`⚠️ [handleDisconnectedLine] Nenhuma linha disponível para substituir a linha desconectada para o operador ${operator?.name || operatorId}`);
 
-          // Fechar conversas ativas do operador
+          // Fechar conversas ativas do operador (deixar sem tabulação - serão reabertas quando receber nova linha)
           const operatorContacts = contactsByOperator.get(operatorId) || [];
           if (operatorContacts.length > 0) {
-            try {
-              await this.prisma.conversation.updateMany({
-                where: {
-                  contactPhone: { in: operatorContacts.map(c => c.phone) },
-                  userId: operatorId,
-                  tabulation: null,
-                },
-                data: { tabulation: 'Sem linha disponível' },
-              });
-              console.log(`🔄 [handleDisconnectedLine] Conversas ativas do operador ${operator?.name || operatorId} foram fechadas`);
-            } catch (error) {
-              console.error(`❌ [handleDisconnectedLine] Erro ao fechar conversas:`, error);
-            }
+            console.log(`📋 [handleDisconnectedLine] Operador ${operator?.name || operatorId} tem ${operatorContacts.length} conversa(s) ativa(s) aguardando nova linha`);
           }
 
           // Notificar operador via WebSocket
           try {
-            this.websocketGateway.sendToUser(operatorId, 'line_disconnected', {
+            this.websocketGateway.emitToUser(operatorId, 'line_disconnected', {
               message: 'Sua linha foi desconectada. Aguarde uma nova linha ser atribuída ou contate um supervisor.',
               lineId: lineId,
             });
