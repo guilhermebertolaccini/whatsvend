@@ -1,6 +1,6 @@
-# 📚 Tutorial NEWVEND - Guia de Permissões por Perfil
+# 📚 Tutorial Vend - Guia de Permissões por Perfil
 
-Este documento descreve as funcionalidades disponíveis para cada perfil de usuário na plataforma NEWVEND.
+Este documento descreve as funcionalidades disponíveis para cada perfil de usuário na plataforma Vend.
 
 ---
 
@@ -211,4 +211,4 @@ O **Administrador** tem acesso total a todas as funcionalidades.
 
 ---
 
-*Documento gerado em Janeiro de 2026 - NEWVEND v2.0*
+*Documento gerado em Janeiro de 2026 - Vend v2.0*

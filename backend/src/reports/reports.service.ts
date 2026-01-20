@@ -2559,4 +2559,163 @@ export class ReportsService {
 
     return this.normalizeObject(result);
   }
+
+  // ==================== CUSTOM REPORT BUILDER ====================
+
+  /**
+   * Lista de tabelas permitidas para o criador de relatórios
+   * IMPORTANTE: Apenas tabelas seguras e sem dados sensíveis
+   */
+  private readonly ALLOWED_TABLES: Record<string, { displayName: string; description: string }> = {
+    'User': { displayName: 'Usuários', description: 'Dados de operadores e administradores' },
+    'Conversation': { displayName: 'Conversas', description: 'Histórico de atendimentos' },
+    'Contact': { displayName: 'Contatos', description: 'Clientes e leads' },
+    'LinesStock': { displayName: 'Linhas', description: 'Linhas WhatsApp' },
+    'Segment': { displayName: 'Segmentos', description: 'Segmentos de atendimento' },
+    'Tabulation': { displayName: 'Tabulações', description: 'Tipos de tabulação' },
+    'SystemEvent': { displayName: 'Eventos do Sistema', description: 'Log de eventos' },
+    'Template': { displayName: 'Templates', description: 'Templates de mensagem' },
+    'Campaign': { displayName: 'Campanhas', description: 'Campanhas de disparo' },
+    'CampaignContact': { displayName: 'Contatos de Campanhas', description: 'Contatos em campanhas' },
+    'Tag': { displayName: 'Tags', description: 'Tags de classificação' },
+  };
+
+  /**
+   * Colunas sensíveis que NÃO devem ser expostas
+   */
+  private readonly BLOCKED_COLUMNS = ['password', 'token', 'apikey', 'secret', 'key'];
+
+  /**
+   * Retorna lista de tabelas disponíveis para relatórios customizados
+   */
+  async getAvailableTables() {
+    return Object.entries(this.ALLOWED_TABLES).map(([name, info]) => ({
+      name,
+      displayName: info.displayName,
+      description: info.description,
+    }));
+  }
+
+  /**
+   * Retorna colunas disponíveis para uma tabela
+   */
+  async getTableColumns(tableName: string) {
+    // Verificar se a tabela está na whitelist
+    if (!this.ALLOWED_TABLES[tableName]) {
+      throw new Error(`Tabela '${tableName}' não permitida`);
+    }
+
+    // Buscar schema da tabela via Prisma introspection
+    const schemaQuery = `
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_name = $1 
+      AND table_schema = 'public'
+      ORDER BY ordinal_position
+    `;
+
+    const columns: any[] = await this.prisma.$queryRawUnsafe(schemaQuery, tableName);
+
+    // Filtrar colunas bloqueadas
+    return columns
+      .filter(col => !this.BLOCKED_COLUMNS.includes(col.column_name.toLowerCase()))
+      .map(col => ({
+        name: col.column_name,
+        type: col.data_type,
+        nullable: col.is_nullable === 'YES',
+      }));
+  }
+
+  /**
+   * Executa query customizada com filtros
+   * IMPORTANTE: Usa query parametrizada para prevenir SQL injection
+   */
+  async executeCustomQuery(
+    tableName: string,
+    columns: string[],
+    filters: Array<{ column: string; operator: string; value: string }>,
+    limit: number = 1000,
+  ) {
+    // 1. Validar tabela
+    if (!this.ALLOWED_TABLES[tableName]) {
+      throw new Error(`Tabela '${tableName}' não permitida`);
+    }
+
+    // 2. Buscar colunas válidas da tabela
+    const validColumns = await this.getTableColumns(tableName);
+    const columnNames = validColumns.map(c => c.name);
+
+    // 3. Validar colunas solicitadas
+    const safeColumns = columns.filter(col => columnNames.includes(col));
+    if (safeColumns.length === 0) {
+      throw new Error('Nenhuma coluna válida selecionada');
+    }
+
+    // 4. Construir SELECT seguro (usando aspas duplas para nomes de colunas)
+    const selectClause = safeColumns.map(c => `"${c}"`).join(', ');
+
+    // 5. Construir WHERE com parâmetros
+    const whereConditions: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    for (const filter of filters) {
+      // Validar que a coluna existe
+      if (!columnNames.includes(filter.column)) {
+        continue;
+      }
+
+      // Validar operador
+      const allowedOperators = ['=', '!=', '>', '<', '>=', '<=', 'LIKE', 'ILIKE', 'IS NULL', 'IS NOT NULL'];
+      if (!allowedOperators.includes(filter.operator.toUpperCase())) {
+        continue;
+      }
+
+      if (filter.operator.toUpperCase() === 'IS NULL') {
+        whereConditions.push(`"${filter.column}" IS NULL`);
+      } else if (filter.operator.toUpperCase() === 'IS NOT NULL') {
+        whereConditions.push(`"${filter.column}" IS NOT NULL`);
+      } else if (filter.operator.toUpperCase() === 'LIKE' || filter.operator.toUpperCase() === 'ILIKE') {
+        whereConditions.push(`"${filter.column}" ${filter.operator.toUpperCase()} $${paramIndex}`);
+        params.push(`%${filter.value}%`);
+        paramIndex++;
+      } else {
+        whereConditions.push(`"${filter.column}" ${filter.operator} $${paramIndex}`);
+        params.push(filter.value);
+        paramIndex++;
+      }
+    }
+
+    // 6. Construir query final
+    let query = `SELECT ${selectClause} FROM "${tableName}"`;
+    if (whereConditions.length > 0) {
+      query += ` WHERE ${whereConditions.join(' AND ')}`;
+    }
+    query += ` LIMIT ${Math.min(limit, 10000)}`; // Máximo de 10000 registros
+
+    console.log(`🔍 [CustomReport] Executando: ${query}`);
+    console.log(`🔍 [CustomReport] Params:`, params);
+
+    // 7. Executar query
+    const results: any[] = await this.prisma.$queryRawUnsafe(query, ...params);
+
+    // 8. Formatar datas
+    const formattedResults = results.map(row => {
+      const formatted: any = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (value instanceof Date) {
+          formatted[key] = this.formatDateTime(value);
+        } else {
+          formatted[key] = value;
+        }
+      }
+      return formatted;
+    });
+
+    return {
+      query: query.replace(/\$\d+/g, '?'), // Ocultar parâmetros no retorno
+      totalRows: formattedResults.length,
+      data: formattedResults,
+    };
+  }
 }

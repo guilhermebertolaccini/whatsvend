@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Res } from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, UseGuards, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import { ReportFilterDto } from './dto/report-filter.dto';
@@ -217,6 +217,48 @@ export class ReportsController {
         hiperPersonalizado,
       },
     };
+  }
+
+  // ==================== CUSTOM REPORT BUILDER ====================
+
+  @Get('builder/tables')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Lista tabelas disponíveis para relatórios customizados' })
+  async getAvailableTables() {
+    return this.reportsService.getAvailableTables();
+  }
+
+  @Get('builder/columns')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Lista colunas de uma tabela' })
+  async getTableColumns(@Query('table') table: string) {
+    if (!table) {
+      throw new Error('Parâmetro "table" é obrigatório');
+    }
+    return this.reportsService.getTableColumns(table);
+  }
+
+  @Post('builder/execute')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Executa query customizada' })
+  async executeCustomQuery(
+    @Body() body: {
+      table: string;
+      columns: string[];
+      filters?: Array<{ column: string; operator: string; value: string }>;
+      limit?: number;
+    },
+  ) {
+    const { table, columns, filters = [], limit = 1000 } = body;
+
+    if (!table) {
+      throw new Error('Campo "table" é obrigatório');
+    }
+    if (!columns || columns.length === 0) {
+      throw new Error('Campo "columns" é obrigatório e deve conter ao menos uma coluna');
+    }
+
+    return this.reportsService.executeCustomQuery(table, columns, filters, limit);
   }
 }
 

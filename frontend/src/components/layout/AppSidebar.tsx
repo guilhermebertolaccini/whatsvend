@@ -23,6 +23,7 @@ import {
   Activity,
   UserCheck,
   Clock,
+  Database,
 } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -158,6 +159,13 @@ const menuItems: MenuItem[] = [
     url: "/regras-alocacao",
     icon: Settings,
     color: "text-violet-500",
+    roles: ["admin"],
+  },
+  {
+    title: "Criador de Relatórios",
+    url: "/criador-relatorio",
+    icon: Database,
+    color: "text-cyan-500",
     roles: ["admin"],
   },
   {

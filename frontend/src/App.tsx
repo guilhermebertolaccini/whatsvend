@@ -32,6 +32,7 @@ import NotFound from "./pages/NotFound";
 import RelatorioVidaUtil from "./pages/RelatorioVidaUtil";
 import RelatorioAlocacoes from "./pages/RelatorioAlocacoes";
 import RegrasAlocacao from "./pages/RegrasAlocacao";
+import CriadorRelatorio from "./pages/CriadorRelatorio";
 
 const queryClient = new QueryClient();
 
@@ -109,6 +110,7 @@ function AppRoutes() {
       <Route path="/relatorios/vida-util" element={<ProtectedRoute><RelatorioVidaUtil /></ProtectedRoute>} />
       <Route path="/relatorios/alocacoes" element={<ProtectedRoute><RelatorioAlocacoes /></ProtectedRoute>} />
       <Route path="/regras-alocacao" element={<ProtectedRoute><RegrasAlocacao /></ProtectedRoute>} />
+      <Route path="/criador-relatorio" element={<ProtectedRoute><CriadorRelatorio /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
