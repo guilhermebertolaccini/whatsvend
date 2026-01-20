@@ -52,10 +52,13 @@ export class SegmentsService {
   async update(id: number, updateSegmentDto: UpdateSegmentDto) {
     const segment = await this.findOne(id);
 
-    // Atualizar segmento primeiro
+    // Extrair apenas os campos que podem ser atualizados (excluir name para evitar conflito de unique)
+    const { name, ...updateData } = updateSegmentDto;
+
+    // Atualizar segmento (sem o name para evitar conflito)
     const updatedSegment = await this.prisma.segment.update({
       where: { id },
-      data: updateSegmentDto,
+      data: updateData,
     });
 
     // Se maxOperatorsPerLine foi alterado, aplicar limite às linhas existentes
