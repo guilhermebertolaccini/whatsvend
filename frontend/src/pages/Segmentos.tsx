@@ -64,8 +64,8 @@ export default function Segmentos() {
 
   const columns: Column<Segment>[] = [
     { key: "name", label: "Nome" },
-    { 
-      key: "allowsFreeMessage", 
+    {
+      key: "allowsFreeMessage",
       label: "Mensagem Livre",
       render: (segment) => (
         segment.allowsFreeMessage ? (
@@ -123,7 +123,11 @@ export default function Segmentos() {
     setIsSaving(true);
     try {
       if (editingSegment) {
-        const updated = await segmentsService.update(parseInt(editingSegment.id), formData.name.trim(), formData.allowsFreeMessage, formData.identifier);
+        const updated = await segmentsService.update(parseInt(editingSegment.id), {
+          name: formData.name.trim(),
+          allowsFreeMessage: formData.allowsFreeMessage,
+          identifier: formData.identifier
+        });
         setSegments(segments.map(s => s.id === editingSegment.id ? mapApiToLocal(updated) : s));
         toast({
           title: "Segmento atualizado",
@@ -214,7 +218,7 @@ export default function Segmentos() {
         </Label>
       </div>
       <div className="text-xs text-muted-foreground">
-        {formData.allowsFreeMessage 
+        {formData.allowsFreeMessage
           ? "Operadores deste segmento podem enviar qualquer mensagem no 1x1"
           : "Operadores deste segmento só podem enviar mensagens através de templates no 1x1"}
       </div>
@@ -248,49 +252,49 @@ export default function Segmentos() {
     <MainLayout>
       <div className="h-full overflow-y-auto scrollbar-content">
         <div className="animate-fade-in">
-        <div className="mb-4 flex justify-end gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleUploadCSV}
-            className="hidden"
-            id="csv-upload-segments"
+          <div className="mb-4 flex justify-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleUploadCSV}
+              className="hidden"
+              id="csv-upload-segments"
+            />
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Importar CSV
+                </>
+              )}
+            </Button>
+          </div>
+          <CrudTable
+            title="Segmentos"
+            subtitle="Gerenciar segmentos de atendimento"
+            columns={columns}
+            data={segments}
+            searchPlaceholder="Buscar segmentos..."
+            onAdd={handleAdd}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            renderForm={renderForm}
+            isFormOpen={isFormOpen}
+            onFormOpenChange={setIsFormOpen}
+            editingItem={editingSegment}
           />
-          <Button
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Importando...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" />
-                Importar CSV
-              </>
-            )}
-          </Button>
         </div>
-        <CrudTable
-          title="Segmentos"
-          subtitle="Gerenciar segmentos de atendimento"
-          columns={columns}
-          data={segments}
-          searchPlaceholder="Buscar segmentos..."
-          onAdd={handleAdd}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          renderForm={renderForm}
-          isFormOpen={isFormOpen}
-          onFormOpenChange={setIsFormOpen}
-          editingItem={editingSegment}
-        />
       </div>
-    </div>
     </MainLayout>
   );
 }

@@ -208,17 +208,10 @@ export const segmentsService = {
     });
   },
 
-  update: async (id: number, name: string, allowsFreeMessage?: boolean, identifier?: 'cliente' | 'proprietario'): Promise<Segment> => {
-    const body: any = { name };
-    if (allowsFreeMessage !== undefined) {
-      body.allowsFreeMessage = allowsFreeMessage;
-    }
-    if (identifier !== undefined) {
-      body.identifier = identifier;
-    }
+  update: async (id: number, data: Partial<Omit<Segment, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Segment> => {
     return apiRequest<Segment>(`/segments/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     });
   },
 
