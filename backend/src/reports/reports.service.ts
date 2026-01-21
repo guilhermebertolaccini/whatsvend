@@ -1872,211 +1872,77 @@ export class ReportsService {
       startDate: filters.startDate,
       endDate: filters.endDate,
       segment: filters.segment,
-      onlyMovimentedLines: filters.onlyMovimentedLines,
     });
 
-    const whereClause: any = {};
+    // Buscar segmento "Padrão" para excluí-lo
+    const padraoSegment = await this.prisma.segment.findUnique({
+      where: { name: "Padrão" },
+    });
 
-    // NÃO excluir linhas de segmento "Padrão" - queremos TODAS as linhas
-    // Se houver filtro de segmento, usar esse segmento
+    // Preparar filtro de datas (createdAt OR updatedAt)
+    const dateConditions: any[] = [];
+    if (filters.startDate || filters.endDate) {
+      const startDate = filters.startDate
+        ? new Date(`${filters.startDate}T00:00:00.000Z`)
+        : new Date("2000-01-01");
+      const endDate = filters.endDate
+        ? new Date(`${filters.endDate}T23:59:59.999Z`)
+        : new Date("2100-01-01");
+
+      dateConditions.push(
+        { createdAt: { gte: startDate, lte: endDate } },
+        { updatedAt: { gte: startDate, lte: endDate } }
+      );
+    }
+
+    // Construir whereClause
+    const whereClause: any = {
+      // Excluir segmento "Padrão"
+      ...(padraoSegment && { segment: { not: padraoSegment.id } }),
+    };
+
+    // Se houver filtro de segmento específico, usar esse
     if (filters.segment) {
       whereClause.segment = filters.segment;
     }
-    // Se não houver filtro de segmento, trazer TODAS as linhas (sem excluir padrão)
 
-    // Aplicar filtro de identificador
+    // Adicionar filtro de datas (OR entre createdAt e updatedAt)
+    if (dateConditions.length > 0) {
+      whereClause.OR = dateConditions;
+    }
+
+    // Aplicar filtro de identificador (cliente/proprietário)
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
       "line"
     );
 
-    // Buscar TODAS as linhas (sem excluir segmento padrão)
-    let lines = await this.prisma.linesStock.findMany({
+    // Buscar linhas
+    const lines = await this.prisma.linesStock.findMany({
       where: finalWhereClause,
-      orderBy: { createdAt: "asc" },
+      orderBy: { updatedAt: "desc" },
     });
 
-    console.log(
-      `[Reports] Total de linhas encontradas antes de filtrar movimentadas: ${lines.length}`
-    );
+    console.log(`[Reports] Total de linhas encontradas: ${lines.length}`);
 
-    // Se onlyMovimentedLines = true, filtrar apenas linhas que foram movimentadas
-    if (filters.onlyMovimentedLines === true) {
-      // Buscar segmento "Padrão" para excluí-lo
-      const padraoSegment = await this.prisma.segment.findUnique({
-        where: { name: "Padrão" },
-      });
-
-      const lineIds = lines.map((l) => l.id);
-
-      // Preparar filtros de data para buscar movimentações
-      const dateFilter: any = {};
-      if (filters.startDate || filters.endDate) {
-        if (filters.startDate) {
-          dateFilter.gte = new Date(`${filters.startDate}T00:00:00.000Z`);
-        }
-        if (filters.endDate) {
-          dateFilter.lte = new Date(`${filters.endDate}T23:59:59.999Z`);
-        }
-      }
-
-      // Buscar conversas que usaram essas linhas no período
-      const conversationsInPeriod = await this.prisma.conversation.findMany({
-        where: {
-          userLine: { in: lineIds },
-          isAdminTest: false, // Excluir testes administrador
-          ...(Object.keys(dateFilter).length > 0 && { datetime: dateFilter }),
-        },
-        select: { userLine: true },
-        distinct: ["userLine"],
-      });
-
-      // Buscar campanhas que usaram essas linhas no período
-      const campaignsInPeriod = await this.prisma.campaign.findMany({
-        where: {
-          lineReceptor: { in: lineIds },
-          isAdminTest: false, // Excluir testes administrador
-          ...(Object.keys(dateFilter).length > 0 && { dateTime: dateFilter }),
-        },
-        select: { lineReceptor: true },
-        distinct: ["lineReceptor"],
-      });
-
-      // Combinar todas as linhas movimentadas (apenas por conversas/campanhas, não por mudança de status)
-      const movimentedLineIds = new Set<number>();
-      conversationsInPeriod.forEach((c) => {
-        if (c.userLine) movimentedLineIds.add(c.userLine);
-      });
-      campaignsInPeriod.forEach((c) => {
-        if (c.lineReceptor) movimentedLineIds.add(c.lineReceptor);
-      });
-
-      // Filtrar apenas linhas movimentadas E excluir linhas do segmento "Padrão"
-      lines = lines.filter((l) => {
-        const isMovimented = movimentedLineIds.has(l.id);
-        const isNotPadrao = padraoSegment
-          ? l.segment !== padraoSegment.id
-          : true;
-        return isMovimented && isNotPadrao;
-      });
-
-      console.log(
-        `[Reports] Linhas movimentadas encontradas (excluindo Padrão): ${lines.length} de ${lineIds.length} totais`
-      );
-    }
-
+    // Buscar segmentos para mapear nomes
     const segments = await this.prisma.segment.findMany();
-    const segmentMap = new Map(segments.map((s) => [s.id, s]));
+    const segmentMap = new Map(segments.map((s) => [s.id, s.name]));
 
-    // Buscar última movimentação de cada linha (última conversa, última campanha, ou última mudança de status)
-    const lineIdsArray = lines.map((l) => l.id);
-    // Buscar última conversa de cada linha
-    const lastConversations = await this.prisma.conversation.findMany({
-      where: {
-        userLine: { in: lineIdsArray },
-        isAdminTest: false,
-      },
-      select: {
-        userLine: true,
-        datetime: true,
-      },
-      orderBy: {
-        datetime: "desc",
-      },
-    });
-
-    // Buscar última campanha de cada linha
-    const lastCampaigns = await this.prisma.campaign.findMany({
-      where: {
-        lineReceptor: { in: lineIdsArray },
-        isAdminTest: false,
-      },
-      select: {
-        lineReceptor: true,
-        dateTime: true,
-      },
-      orderBy: {
-        dateTime: "desc",
-      },
-    });
-
-    // Mapear última movimentação por linha (conversa OU campanha - a mais recente)
-    const lastMovementByLine = new Map<number, Date>();
-
-    // Processar conversas (pegar a mais recente de cada linha)
-    const lastConvByLine = new Map<number, Date>();
-    lastConversations.forEach((conv) => {
-      if (conv.userLine) {
-        const currentLast = lastConvByLine.get(conv.userLine);
-        if (!currentLast || conv.datetime > currentLast) {
-          lastConvByLine.set(conv.userLine, conv.datetime);
-        }
-      }
-    });
-
-    // Processar campanhas (pegar a mais recente de cada linha)
-    const lastCampByLine = new Map<number, Date>();
-    lastCampaigns.forEach((camp) => {
-      if (camp.lineReceptor) {
-        const currentLast = lastCampByLine.get(camp.lineReceptor);
-        if (!currentLast || camp.dateTime > currentLast) {
-          lastCampByLine.set(camp.lineReceptor, camp.dateTime);
-        }
-      }
-    });
-
-    // Combinar conversas e campanhas - pegar a mais recente entre as duas
-    lineIdsArray.forEach((lineId) => {
-      const lastConv = lastConvByLine.get(lineId);
-      const lastCamp = lastCampByLine.get(lineId);
-
-      if (lastConv && lastCamp) {
-        // Pegar a mais recente entre conversa e campanha
-        lastMovementByLine.set(
-          lineId,
-          lastConv > lastCamp ? lastConv : lastCamp
-        );
-      } else if (lastConv) {
-        lastMovementByLine.set(lineId, lastConv);
-      } else if (lastCamp) {
-        lastMovementByLine.set(lineId, lastCamp);
-      }
-      // Se não tem nem conversa nem campanha, não adiciona ao mapa (última movimentação será updatedAt)
-    });
-
-    // Não filtrar por data quando onlyMovimentedLines = false - mostrar TODAS as linhas
-    let filteredLines = lines;
-
-    const result = filteredLines.map((line) => {
-      const segment = line.segment ? segmentMap.get(line.segment) : null;
-
-      // Última movimentação: última conversa/campanha OU updatedAt (mudança de status, ex: banida)
-      const lastMovement = lastMovementByLine.get(line.id);
-      const lastActivity =
-        lastMovement && lastMovement > line.updatedAt
-          ? lastMovement
-          : line.updatedAt; // Se não tem movimento, usar updatedAt (quando foi banida ou atualizada)
-
-      // Estrutura padrão exigida pelo cliente: Carteira, Número, Blindado, Data de Transferência
+    // Mapear para formato de saída
+    const result = lines.map((line) => {
+      const segmentName = line.segment ? segmentMap.get(line.segment) : null;
       return {
-        Carteira: this.normalizeText(segment?.name) || "Sem segmento",
+        Carteira: this.normalizeText(segmentName) || "Sem segmento",
         Número: line.phone,
         Blindado: line.lineStatus === "ban" ? "Sim" : "Não",
-        "Data de Transferência": this.formatDateTime(lastActivity),
-        // Campo auxiliar para ordenação
-        _sortDate: lastActivity,
+        "Data de Transferência": this.formatDateTime(line.updatedAt),
       };
     });
 
-    // Ordenar por data (updatedAt para todas, ou data de movimentação para apenas movimentadas)
-    result.sort((a, b) => a._sortDate.getTime() - b._sortDate.getTime());
-
-    // Remover campo auxiliar de ordenação
-    const finalResult = result.map(({ _sortDate, ...rest }) => rest);
-
     // Normalizar todos os campos de texto do resultado
-    return this.normalizeObject(finalResult);
+    return this.normalizeObject(result);
   }
 
   /**

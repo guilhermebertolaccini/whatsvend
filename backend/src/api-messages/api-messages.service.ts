@@ -473,53 +473,7 @@ export class ApiMessagesService {
           }
         }
 
-        // Typing Indicator: Enviar sinal de "digitando..." antes de enviar mensagem
-        try {
-          const instanceName = `line_${line.phone.replace(/\D/g, '')}`;
-          const cleanPhone = this.phoneValidationService.cleanPhone(message.phone);
-          
-          await axios.post(
-            `${evolution.evolutionUrl}/chat/sendTyping/${instanceName}`,
-            {
-              number: cleanPhone,
-              value: true, // true = digitando
-            },
-            {
-              headers: { 'apikey': evolution.evolutionKey },
-              timeout: 5000,
-            }
-          );
-          console.log(`⌨️ [ApiMessages] Typing indicator enviado para ${cleanPhone}`);
-        } catch (typingError: any) {
-          // Não bloquear envio se o typing indicator falhar
-          console.warn(`⚠️ [ApiMessages] Erro ao enviar typing indicator:`, typingError.message);
-        }
-
-        // Humanização: Delay antes de enviar mensagem massiva
-        const messageLength = finalMessage?.length || 0;
-        const humanizedDelay = await this.humanizationService.getHumanizedDelay(messageLength, false);
-        await this.humanizationService.sleep(humanizedDelay);
-
-        // Parar typing indicator antes de enviar a mensagem
-        try {
-          const instanceName = `line_${line.phone.replace(/\D/g, '')}`;
-          const cleanPhone = this.phoneValidationService.cleanPhone(message.phone);
-          
-          await axios.post(
-            `${evolution.evolutionUrl}/chat/sendTyping/${instanceName}`,
-            {
-              number: cleanPhone,
-              value: false, // false = parou de digitar
-            },
-            {
-              headers: { 'apikey': evolution.evolutionKey },
-              timeout: 5000,
-            }
-          );
-        } catch (typingError: any) {
-          // Ignorar erro ao parar typing indicator
-          console.warn(`⚠️ [ApiMessages] Erro ao parar typing indicator:`, typingError.message);
-        }
+        // Enviar mensagem diretamente (sem typing indicator ou delay)
 
         // Enviar mensagem
         if (useTemplate && templateId && template) {
@@ -596,11 +550,7 @@ export class ApiMessagesService {
 
         processed++;
 
-        // Delay aleatório entre mensagens massivas (5-15 segundos)
-        if (processed < dto.messages.length) {
-          const delay = await this.humanizationService.getMassiveMessageDelay(5, 15);
-          await this.humanizationService.sleep(delay);
-        }
+        // (sem delay entre mensagens)
       } catch (error) {
         errors.push({
           phone: message.phone,

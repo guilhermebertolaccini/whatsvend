@@ -979,12 +979,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         }
       }
 
-      // Humanização: Simular comportamento humano antes de enviar
-      const messageLength = data.message?.length || 0;
-      const isResponse = !data.isNewConversation; // Se não é nova conversa, é resposta
-      const humanizedDelay = await this.humanizationService.getHumanizedDelay(messageLength, isResponse);
-
-      await this.humanizationService.sleep(humanizedDelay);
+      // Enviar mensagem diretamente (sem delay)
 
       // Se templateId foi fornecido, usar TemplatesService para enviar template
       if (data.templateId) {

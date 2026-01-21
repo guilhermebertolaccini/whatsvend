@@ -24,7 +24,7 @@ export class AutoMessageService implements OnModuleInit {
     private rateLimitingService: RateLimitingService,
     private spintaxService: SpintaxService,
     private lineReputationService: LineReputationService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     // Randomizar intervalo: executa a cada 50-70 minutos (não sempre na hora cheia)
@@ -93,7 +93,7 @@ export class AutoMessageService implements OnModuleInit {
 
       // Agrupar por contactPhone e userId para pegar a última mensagem de cada conversa
       const conversationsByContact = new Map<string, any>();
-      
+
       for (const conv of conversations) {
         const key = `${conv.contactPhone}_${conv.userId}`;
         if (!conversationsByContact.has(key)) {
@@ -174,10 +174,7 @@ export class AutoMessageService implements OnModuleInit {
           continue;
         }
 
-        // Humanização: Delay antes de enviar mensagem automática
-        const messageLength = messageText.length;
-        const humanizedDelay = await this.humanizationService.getHumanizedDelay(messageLength, false);
-        await this.humanizationService.sleep(humanizedDelay);
+        // Enviar mensagem diretamente (sem delay)
 
         // Enviar mensagem automática via WebSocket (simulando envio do operador)
         try {
@@ -203,7 +200,7 @@ export class AutoMessageService implements OnModuleInit {
 
           if (evolution) {
             const instanceName = `line_${line.phone.replace(/\D/g, '')}`;
-            
+
             await this.websocketGateway.sendMessageToEvolution(
               evolution.evolutionUrl,
               evolution.evolutionKey,

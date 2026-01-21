@@ -1514,7 +1514,9 @@ export class LinesService {
       });
 
       if (existing) {
-        throw new BadRequestException('Operador já está vinculado a esta linha');
+        // Operador já está vinculado - não fazer nada (evita logs duplicados)
+        console.log(`ℹ️ [assignOperatorToLine] Operador ${userId} já está vinculado à linha ${lineId}, pulando`);
+        return;
       }
 
       // Verificar se operador já tem outra linha
