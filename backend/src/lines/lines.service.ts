@@ -1408,6 +1408,9 @@ export class LinesService {
   // Vincular operador à linha (máximo 2 operadores por linha)
   // Usa transação + lock para evitar race conditions
   async assignOperatorToLine(lineId: number, userId: number): Promise<void> {
+    // Flag para saber se alocação foi feita (para evitar log duplicado)
+    let wasAllocated = false;
+
     // Usar transação com lock para evitar race conditions
     await this.prisma.$transaction(async (tx) => {
       // Lock na linha para evitar atribuições simultâneas
@@ -1516,6 +1519,7 @@ export class LinesService {
       if (existing) {
         // Operador já está vinculado - não fazer nada (evita logs duplicados)
         console.log(`ℹ️ [assignOperatorToLine] Operador ${userId} já está vinculado à linha ${lineId}, pulando`);
+        wasAllocated = false;
         return;
       }
 
@@ -1581,12 +1585,17 @@ export class LinesService {
       }
 
       console.log(`🔄 [assignOperatorToLine] Linha ${line.segment} (segmento atualizado/verificado) agora compatível com operador ${operator.segment}`);
+      wasAllocated = true; // Marcar que alocação foi feita
     }, {
       isolationLevel: 'Serializable', // Nível mais alto de isolamento para evitar race conditions
       timeout: 10000, // 10 segundos de timeout
     });
 
-    // Registrar evento de sistema de alocação (após sucesso da transação)
+    // Registrar evento de sistema de alocação (SOMENTE se alocação foi feita)
+    if (!wasAllocated) {
+      return; // Não logar se operador já estava vinculado
+    }
+
     try {
       const line = await this.prisma.linesStock.findUnique({ where: { id: lineId } });
       const operator = await this.prisma.user.findUnique({ where: { id: userId } });
