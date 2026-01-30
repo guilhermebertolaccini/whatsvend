@@ -459,12 +459,16 @@ export class WebhooksService {
 
             if (isBanned) {
               // Linha permanentemente banida
-              await this.linesService.handleBannedLine(line.id);
-              return { status: 'line_banned', lineId: line.id, reason };
+              // CORREÇÃO: Não banir imediatamente via webhook. Deixar o Monitor verificar (double-check).
+              console.warn(`🛑 [Webhook] Linha ${line.phone} reportou BANIMENTO. Delegando confirmação para o Monitor.`);
+              // await this.linesService.handleBannedLine(line.id);
+              return { status: 'line_banned_reported', lineId: line.id, reason };
             } else {
               // Desconexão temporária (timeout, connectionLost, etc.)
-              await this.linesService.handleDisconnectedLine(line.id);
-              return { status: 'line_disconnected', lineId: line.id, reason };
+              // CORREÇÃO: Não desconectar imediatamente via webhook. Deixar o Monitor verificar.
+              console.warn(`⚠️ [Webhook] Linha ${line.phone} reportou DESCONEXÃO. Delegando verificação para o Monitor.`);
+              // await this.linesService.handleDisconnectedLine(line.id);
+              return { status: 'line_disconnected_reported', lineId: line.id, reason };
             }
           }
 

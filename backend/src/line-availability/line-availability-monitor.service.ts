@@ -141,83 +141,104 @@ export class LineAvailabilityMonitorService {
             instanceName
           );
 
-          // Se linha está banida ou desconectada, realocar
-          // CORREÇÃO: Não marcar como banida se lineStatus for null/undefined (pode ser delay no cache ou timeout)
+          // Se linha está banida ou desconectada, fazer double-check (Regra dos 5 segundos)
           if (lineStatus && (lineStatus === 'ban' || lineStatus === 'disconnected' || lineStatus.toLowerCase() === 'ban' || lineStatus.toLowerCase() === 'disconnected')) {
             this.logger.warn(
-              `Linha ${line.phone} está ${lineStatus} na Evolution. Realocando para operador ${operator.name}...`,
-              'LineAvailability',
-              {
-                operatorId: operator.id,
-                operatorName: operator.name,
-                lineId: line.id,
-                linePhone: line.phone,
-                lineStatus: lineStatus || 'unknown',
-              },
+              `Suspeita de linha ${line.phone} banida/desconectada (${lineStatus}). Aguardando 5s para confirmação...`,
+              'LineAvailability'
             );
 
-            try {
-              // Realocar nova linha (mesma regra: mesmo segmento ou "Padrão")
-              // A função reallocateLineForOperator vai desvincular e marcar a linha como banida
-              const reallocationResult = await this.lineAssignmentService.reallocateLineForOperator(
-                operator.id,
-                operator.segment || null,
-                line.id, // oldLineId - linha banida
-                undefined, // traceId
-                true // markAsBanned = true - marca linha como banida e desvincula TODOS os operadores
+            // Double-Check: esperar 5 segundos
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            // Verificar status novamente
+            const lineStatus2 = await this.healthCheckCacheService.getConnectionStatus(
+              evolution.evolutionUrl,
+              evolution.evolutionKey,
+              instanceName
+            );
+
+            // Se CONTINUA banida ou desconectada, aí sim executamos o banimento
+            if (lineStatus2 && (lineStatus2 === 'ban' || lineStatus2 === 'disconnected' || lineStatus2.toLowerCase() === 'ban' || lineStatus2.toLowerCase() === 'disconnected')) {
+              this.logger.warn(
+                `CONFIRMADO: Linha ${line.phone} está ${lineStatus2} na Evolution após double-check. Realocando para operador ${operator.name}...`,
+                'LineAvailability',
+                {
+                  operatorId: operator.id,
+                  operatorName: operator.name,
+                  lineId: line.id,
+                  linePhone: line.phone,
+                  lineStatus: lineStatus2,
+                },
               );
 
-              if (reallocationResult.success && reallocationResult.lineId) {
-                const newLine = await this.prisma.linesStock.findUnique({
-                  where: { id: reallocationResult.lineId },
-                });
+              try {
+                // Realocar nova linha e marcar a antiga como banida
+                const reallocationResult = await this.lineAssignmentService.reallocateLineForOperator(
+                  operator.id,
+                  operator.segment || null,
+                  line.id, // oldLineId - linha banida
+                  undefined, // traceId
+                  true // markAsBanned = true - REALMENTE bane a linha
+                );
 
-                if (newLine) {
-                  this.logger.log(
-                    `Linha ${newLine.phone} realocada automaticamente para operador ${operator.name} após detectar linha banida`,
+                if (reallocationResult.success && reallocationResult.lineId) {
+                  const newLine = await this.prisma.linesStock.findUnique({
+                    where: { id: reallocationResult.lineId },
+                  });
+
+                  if (newLine) {
+                    this.logger.log(
+                      `Linha ${newLine.phone} realocada automaticamente para operador ${operator.name} após detectar linha banida`,
+                      'LineAvailability',
+                      {
+                        operatorId: operator.id,
+                        operatorName: operator.name,
+                        oldLineId: line.id,
+                        oldLinePhone: line.phone,
+                        newLineId: newLine.id,
+                        newLinePhone: newLine.phone,
+                      },
+                    );
+                  } else {
+                    this.logger.error(
+                      `Linha ${reallocationResult.lineId} não encontrada após realocação para operador ${operator.name}`,
+                      '',
+                      'LineAvailability',
+                      {
+                        operatorId: operator.id,
+                        lineId: reallocationResult.lineId,
+                      },
+                    );
+                  }
+                } else {
+                  this.logger.error(
+                    `Não foi possível realocar linha para operador ${operator.name}: ${reallocationResult.reason}`,
+                    '',
                     'LineAvailability',
                     {
                       operatorId: operator.id,
                       operatorName: operator.name,
                       oldLineId: line.id,
-                      oldLinePhone: line.phone,
-                      newLineId: newLine.id,
-                      newLinePhone: newLine.phone,
-                    },
-                  );
-                } else {
-                  this.logger.error(
-                    `Linha ${reallocationResult.lineId} não encontrada após realocação para operador ${operator.name}`,
-                    '',
-                    'LineAvailability',
-                    {
-                      operatorId: operator.id,
-                      lineId: reallocationResult.lineId,
+                      reason: reallocationResult.reason,
                     },
                   );
                 }
-              } else {
+              } catch (error: any) {
                 this.logger.error(
-                  `Não foi possível realocar linha para operador ${operator.name}: ${reallocationResult.reason}`,
-                  '',
+                  `Erro ao realocar linha para operador ${operator.name}`,
+                  error.stack,
                   'LineAvailability',
                   {
                     operatorId: operator.id,
-                    operatorName: operator.name,
-                    oldLineId: line.id,
-                    reason: reallocationResult.reason,
+                    error: error.message,
                   },
                 );
               }
-            } catch (error: any) {
-              this.logger.error(
-                `Erro ao realocar linha para operador ${operator.name}`,
-                error.stack,
-                'LineAvailability',
-                {
-                  operatorId: operator.id,
-                  error: error.message,
-                },
+            } else {
+              this.logger.log(
+                `Falso positivo: Linha ${line.phone} voltou com status '${lineStatus2 || 'unknown'}' após 5s. Mantendo linha.`,
+                'LineAvailability'
               );
             }
           }

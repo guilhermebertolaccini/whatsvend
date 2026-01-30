@@ -322,7 +322,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
                           user.segment || null,
                           fallbackLine.id, // oldLineId - linha banida
                           undefined, // traceId
-                          true // markAsBanned = true - marca linha como banida
+                          false // markAsBanned = false - monitor fará o banimento se necessário
                         );
 
                         if (reallocationResult.success && reallocationResult.lineId) {
@@ -608,7 +608,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
                 user.segment || null,
                 currentLine.id, // oldLineId - linha banida
                 undefined, // traceId
-                true // markAsBanned = true - marca linha como banida
+                false // markAsBanned = false - monitor fará o banimento se necessário
               );
 
               if (reallocationResult.success && reallocationResult.lineId) {
@@ -1255,7 +1255,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
                 user.segment || null,
                 currentLineId,
                 undefined, // traceId
-                markLineAsBanned // Marcar linha como banida se necessário
+                false // markAsBanned = false - monitor fará o banimento se necessário
               );
 
               if (reallocationResult.success && reallocationResult.lineId && reallocationResult.lineId !== currentLineId) {
