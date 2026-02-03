@@ -1830,7 +1830,7 @@ export class LinesService {
         name: activator.name,
         email: activator.email,
         totalCreated: totalCreatedDistinct, // Usar contagem distinta
-        totalBannedInRange: activatorBanEvents.length,
+        totalBannedInRange: processedBansPerDay.size, // Usar contagem deduplicada (bans únicos por dia)
         currentlyActive: createdLines.filter(l => l.lineStatus === 'active').length,
         peakBanDay,
         dailyHistory,
