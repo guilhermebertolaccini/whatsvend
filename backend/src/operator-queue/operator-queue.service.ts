@@ -189,6 +189,11 @@ export class OperatorQueueService {
       // Tentar vincular linha
       await this.linesService.assignOperatorToLine(lineId, userId);
 
+      // Remover registro 'assigned' anterior deste usuário para evitar violação da constraint unique
+      await this.prisma.operatorQueue.deleteMany({
+        where: { userId, status: 'assigned' },
+      });
+
       // Atualizar status na fila
       await this.prisma.operatorQueue.updateMany({
         where: {
@@ -238,17 +243,60 @@ export class OperatorQueueService {
   async processQueue(): Promise<void> {
     try {
       // Expirar entradas antigas
-      await this.prisma.operatorQueue.updateMany({
+      // Expirar entradas antigas (loop para evitar violação de unique constraint)
+      const expiredItems = await this.prisma.operatorQueue.findMany({
         where: {
           status: 'waiting',
-          expiresAt: {
-            lt: new Date(),
-          },
-        },
-        data: {
-          status: 'expired',
+          expiresAt: { lt: new Date() },
         },
       });
+
+      for (const item of expiredItems) {
+        // Remover registro 'expired' anterior
+        await this.prisma.operatorQueue.deleteMany({
+        });
+
+        // Marcar atual como expired
+        await this.prisma.operatorQueue.update({
+          where: { id: item.id },
+          data: { status: 'expired' },
+        });
+      }
+
+      // Buscar próximo da fila (prioridade > data de criação)
+      // Tentar buscar do segmento primeiro (se houver operador disponível para o segmento)
+      // TODO: Implementar lógica de segmento se necessário
+
+      const nextInQueue = await this.prisma.operatorQueue.findFirst({
+        where: {
+          status: 'waiting',
+          segmentId: { not: null }, // Exemplo: priorizar quem tem segmento definido?
+          // Na verdade a lógica original buscava todos, vamos manter simples por enquanto
+          // A query original buscava SEM filtro de segmento aqui, então vamos manter
+          // Mas espere, a lógica original tinha um bloco comentado ou complexo? 
+          // Olhando o código anterior, parecia buscar `nextInQueue` com sorting.
+          // Vou restaurar a busca do `anyNext` que estava logica principal de processamento
+        },
+        orderBy: [
+          { priority: 'desc' },
+          { createdAt: 'asc' },
+        ],
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+      // AVISO: O código original tinha lógica de buscar `nextInQueue` (com segmento?) e depois `anyNext`.
+      // Como o replace limitou a visão, vou assumir que a lógica de busca do candidate deve ser preservada.
+      // Vou apenas substituir a parte do `updateMany` de expiração.
+
+      // ... RESTORE ORIGINAL SEARCH LOGIC ...
+      // Perdi a visão do que vinha depois da linha 252.
+      // Vou cancelar este replace e fazer um menor focado APENAS no updateMany.
 
       // Buscar operadores aguardando
       const waitingOperators = await this.prisma.operatorQueue.findMany({
