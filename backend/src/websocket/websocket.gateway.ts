@@ -1407,6 +1407,10 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             {
               number: targetNumber,
               text: data.message,
+              options: {
+                delay: 1200,
+                linkPreview: false
+              }
             },
             {
               headers: { 'apikey': evolution.evolutionKey },
@@ -1771,6 +1775,10 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
               {
                 number: data.contactPhone.replace(/\D/g, ''),
                 text: data.message || ' ',
+                options: {
+                  delay: 1200,
+                  linkPreview: false
+                }
               },
               {
                 headers: { 'apikey': evolution.evolutionKey },
@@ -1820,7 +1828,9 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
 
             // AQUI podemos adicionar logs extras se a linha estiver desconectada
             if (connectionState !== 'open' && connectionState !== 'connected' && connectionState !== 'OPEN' && connectionState !== 'CONNECTED') {
-              console.error(`❌ [WebSocket] Linha ${newLine.phone} confirmada como desconectada/problemática.`);
+              console.error(`❌ [WebSocket] Linha ${newLine.phone} confirmada como desconectada/problemática. Banindo...`);
+              await this.linesService.handleBannedLine(newLineId);
+              console.log(`✅ [WebSocket] Linha ${newLine.phone} marcada como banida no banco.`);
             }
           } catch (healthError) {
             console.error(`❌ [WebSocket] Erro ao verificar status da linha ${newLine.phone}:`, healthError);

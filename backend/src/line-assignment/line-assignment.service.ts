@@ -163,6 +163,9 @@ export class LineAssignmentService {
           where: {
             lineStatus: 'active',
           },
+          orderBy: {
+            createdAt: 'desc', // Priorizar as últimas linhas cadastradas
+          },
           include: {
             operators: {
               include: {
