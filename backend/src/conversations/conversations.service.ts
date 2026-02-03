@@ -5,7 +5,7 @@ import { UpdateConversationDto } from './dto/update-conversation.dto';
 
 @Injectable()
 export class ConversationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(createConversationDto: CreateConversationDto) {
     return this.prisma.conversation.create({
@@ -19,18 +19,25 @@ export class ConversationsService {
   async findAll(filters?: any) {
     // Remover campos inválidos que não existem no schema
     const { search, ...validFilters } = filters || {};
-    
+
     // Se houver busca por texto, aplicar filtros
-    const where = search 
+    const where = search
       ? {
-          ...validFilters,
-          OR: [
-            { contactName: { contains: search, mode: 'insensitive' } },
-            { contactPhone: { contains: search } },
-            { message: { contains: search, mode: 'insensitive' } },
-          ],
-        }
+        ...validFilters,
+        OR: [
+          { contactName: { contains: search, mode: 'insensitive' } },
+          { contactPhone: { contains: search } },
+          { message: { contains: search, mode: 'insensitive' } },
+        ],
+      }
       : validFilters;
+
+    console.log(
+      `🔍 [ConversationsService.findAll] Filters:`,
+      JSON.stringify(filters),
+      `Where:`,
+      JSON.stringify(where)
+    );
 
     return this.prisma.conversation.findMany({
       where,

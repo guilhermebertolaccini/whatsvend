@@ -116,6 +116,8 @@ export default function Supervisionar() {
       }
 
       const data = await conversationsService.getActive(segmentParam);
+      console.log("🔍 [Supervisionar] Carregando conversas com segmento:", segmentParam, "Dados:", data.length);
+
 
       // Group conversations by contact phone
       const groupedMap = new Map<string, ConversationGroup>();
@@ -339,7 +341,7 @@ export default function Supervisionar() {
                           </span>
                         </div>
                         <p className="text-xs text-warning truncate">
-                          Op: {conv.operatorName}
+                          Op: {conv.operatorName} | Seg: {conv.messages[0]?.segment}
                         </p>
                         <div className="flex items-center gap-1 mt-0.5">
                           {conv.isFromContact ? (
