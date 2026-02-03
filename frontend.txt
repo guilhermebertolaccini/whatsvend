@@ -1,0 +1,60 @@
+
+Frontend em Vue 3 + Vite + Pinia + Vue Router + Tailwind + Socket.IO-client + vue-virtual-scroller
+
+Versões todas @Lastest
+
+Cores:
+    Primária (Azul SaaS):      #1F6AFF
+    Secundária (Ciano suave): #4DD2FF
+    Fundo claro:              #F8FAFC
+    Fundo escuro (sidebar):   #0F172A
+    Texto principal:          #0B1220
+    Texto secundário:         #64748B
+    Borda / divisores:        #E5E7EB
+    Sucesso (Online):         #22C55E
+    Aviso:                    #FACC15
+    Erro:                     #EF4444
+    WhatsApp (destaque):      #25D366
+    Botões principais	#1F6AFF
+    Hover	#4DD2FF
+    Sidebar	#0F172A
+    Fundo geral	#F8FAFC
+    Chat ativo	#E0ECFF
+    Online	#22C55E
+    Tag WhatsApp	#25D366
+
+Login:
+    login ao estilo SaaS, solicitando email e senha do usuario, mensagem do tipo "bem vindo", exibindo logo da empresa no card do forms, um pequeno footer reservando direitos a plataforma "vend"
+
+Components:
+    Sidebar:
+        ao topo da sidebar deve ser exibido o logo miniatura da empresa, com nome ao lado "vend" em baixo uma disso deve conter as opções por role
+            operator: Atendimento
+            Supervisor: supervisionar, relatorios, contatos, campanhas, tabulações, segmentos, blocklist
+            Admin: relatorios, contatos, campanhas, tabulações, segmentos, blocklist, evolution, linhas, usuarios
+        Icones bonitos para cada opção
+        no final da sidebar, em baixo no canto esquerdo uma bolinha com primeira letra do usuario, na frente em cima o nome do usuario e em baixo a role, no canto direito ao centro um botão com icone de porta, onde vai faz o logoff 
+
+Home:
+    Uma tela inicial bonita apenas com um texto centralizado solicitando que escolha alguma das opções da sidebar para iniciar o uso da plataforma.
+
+Atendimento:
+    uma segunda sidebar no topo escrito "Atendimentos" uma um icone pequeno de +, abaixo uma lista de todas os Atendimentos daquele operator que não tenham sido tabulados ainda, mostrando uma bolinha colorida com a primeira letra do nome do contact, na frente disso na parte de cima o nome que foi resgistrado no contact e em baixo a ultima mensagem daquela conversa com uma setinha indicando se foi enviada ou recebida, no canto direito colocar o horario dessa ultima mensagem.
+    Funcionalidades:
+        ao clickar on icone de + abrir um modal para chamar 1x1, onde o operator deve preencher o nome, telefone e cpf do contact, gerando uma nova conversa na lista dele.
+        ao clickar em qualquer uma das conversas abrir na direita o chat completo daquela conversa, com todas as mensagens, imagens, audios e documentos enviados, esse chat deve ter um topbar contendo a bolinha e nome do contact e um dropdown que traga as tabulações, quando escolhido uma tabulação precisa ser solicitada uma confirma ao operador para tabular e finalizar aquela conversa. oque vai remover ela da sidebar e do chat. mensagens do operator ficam na direta, enquanto mensagens do contact ficam a esquerda, em baixo um input para escrever e enviar as mensagens, na esquerda um botão de clips para envio de documentos e imagens, e ao lado um de microfone para envio de audios.  necessario ser rapido e dinamico, envio e rebimento de mensagens em tempo real.
+        
+supervisionar:
+    basicamente igual ao atendimento porém apenas para visualização, não podendo enviar mensagens, nem abrir novos 1x1, apenas leitura, o supervisor deve conseguir ver todas as conversas do seu segmento, tabuladas ou não, na sidebar do supervisor ao invés do botão + colocar um dropdown de filtro onde ele possa selecionar o operator que deseja ver as conversas, ai a siderbar vai exibir sómente as conversas daquele operator
+
+relatorios: 
+    a definir
+
+
+campanhas:
+    Pagina de campanhas deve conter um forms para cadastro da campanha, solicitando nome da campanha, qual segmento da campanha, e qual a velocidade da campanha, sendo rapida, normal, ou devagar, um botão de clips, quando clickado abrir um explorer para seleção do .csv, abaixo do forms deve conter uma lista das campanhas já enviadas
+
+tabulações, segmentos, blocklist, evolution, linhas, usuarios, contatos:
+    Paginas de CRUD , uma lista vertical simples dados criados, um input em cima para filtrar por nome , e um botão escrito "novo" para criação de um novo 
+
+

@@ -1,0 +1,501 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  admin
+  operator
+  supervisor
+  ativador
+  digital
+}
+
+enum Status {
+  Online
+  Offline
+}
+
+enum LineStatus {
+  connecting
+  active
+  disconnected
+  ban
+}
+
+enum Sender {
+  operator
+  contact
+}
+
+enum Speed {
+  fast
+  medium
+  slow
+}
+
+enum Identifier {
+  cliente
+  proprietario
+}
+
+// Models
+model User {
+  id             Int      @id @default(autoincrement())
+  name           String
+  email          String   @unique
+  password       String
+  role           Role
+  segment        Int?
+  line           Int? // Mantido para compatibilidade (deprecated - usar LineOperators)
+  status         Status   @default(Offline)
+  oneToOneActive Boolean  @default(true) // Se true, operador pode chamar clientes no 1x1
+  identifier     Identifier @default(proprietario) // cliente ou proprietario - usado para filtrar relatórios
+  isActive       Boolean  @default(true) // Se true, usuário está ativo no sistema
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  lineOperators LineOperator[] // Relacionamento com linhas
+  createdLines  LinesStock[] // Linhas criadas por este usuário (para ativadores)
+  queueEntries  OperatorQueue[] @relation("OperatorQueueUser") // Entradas na fila de espera
+
+  @@index([email])
+  @@index([segment])
+  @@index([line])
+  @@index([role, status])
+  @@index([identifier])
+  @@index([isActive])
+
+  systemEvents SystemEvent[]
+}
+
+model Segment {
+  id                  Int        @id @default(autoincrement())
+  name                String     @unique
+  allowsFreeMessage   Boolean    @default(true) // Se true, permite mensagens livres no 1x1. Se false, só permite templates.
+  identifier          Identifier @default(proprietario) // cliente ou proprietario - usado para filtrar relatórios
+  maxOperatorsPerLine Int        @default(2) // Máximo de operadores por linha neste segmento
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  queueEntries        OperatorQueue[] @relation("OperatorQueueSegment") // Entradas na fila de espera deste segmento
+
+  @@index([name])
+  @@index([identifier])
+}
+
+model Tabulation {
+  id        Int      @id @default(autoincrement())
+  name      String
+  isCPC     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Contact {
+  id           Int       @id @default(autoincrement())
+  name         String
+  phone        String    @unique // Garantir que cada telefone seja único (não permite duplicatas)
+  segment      Int?
+  cpf          String?
+  contract     String?
+  isCPC        Boolean   @default(false) // Se true, contato foi marcado como CPC
+  lastCPCAt    DateTime? // Última vez que foi marcado como CPC (para temporizador)
+  isNameManual Boolean   @default(false) // Se true, nome foi definido manualmente pelo admin e não deve ser atualizado automaticamente
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([phone])
+  @@index([cpf])
+  @@index([segment])
+  @@index([isCPC])
+}
+
+model Campaign {
+  id                Int       @id @default(autoincrement())
+  name              String
+  contactName       String
+  contactPhone      String
+  contactSegment    Int?
+  dateTime          DateTime  @default(now())
+  lineReceptor      Int?
+  response          Boolean   @default(false)
+  speed             Speed
+  retryCount        Int       @default(0)
+  useTemplate       Boolean   @default(false)
+  templateId        Int?
+  templateVariables String?   @db.Text
+  endTime           DateTime? // Horário limite para envio das mensagens
+  isAdminTest       Boolean   @default(false) // Se true, é ação de teste administrador e não aparece nos relatórios
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([contactPhone])
+  @@index([contactSegment])
+  @@index([lineReceptor])
+  @@index([response])
+  @@index([dateTime])
+  @@index([templateId])
+  @@index([name])
+}
+
+model BlockList {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  phone     String?
+  cpf       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phone])
+  @@index([cpf])
+}
+
+model LinesStock {
+  id            Int        @id @default(autoincrement())
+  phone         String     @unique
+  lineStatus    LineStatus @default(connecting)
+  segment       Int?
+  linkedTo      Int? // Mantido para compatibilidade (deprecated - usar LineOperators)
+  evolutionName String
+  oficial       Boolean    @default(false)
+  token         String?
+  businessID    String?
+  numberId      String?
+  receiveMedia  Boolean    @default(false) // Se true, ativa webhook_base64 para receber imagens/áudios/docs
+  isReserve     Boolean    @default(false) // Se true, linha é reservada (aceita apenas 1 operador)
+  createdBy     Int? // ID do usuário que criou a linha (para rastrear produtividade dos ativadores)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  operators LineOperator[] // Relacionamento com operadores
+  creator   User?          @relation(fields: [createdBy], references: [id]) // Usuário que criou
+  assignedQueueEntries OperatorQueue[] @relation("OperatorQueueAssignedLine") // Entradas na fila que receberam esta linha
+
+  @@index([phone])
+  @@index([lineStatus])
+  @@index([segment])
+  @@index([linkedTo])
+  @@index([evolutionName])
+  @@index([createdBy])
+  @@index([isReserve])
+}
+
+// Tabela de relacionamento entre Linhas e Operadores (máximo 2 operadores por linha)
+model LineOperator {
+  id        Int      @id @default(autoincrement())
+  lineId    Int
+  userId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  line LinesStock @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lineId, userId])
+  @@index([lineId])
+  @@index([userId])
+}
+
+model Evolution {
+  id            Int      @id @default(autoincrement())
+  evolutionName String   @unique
+  evolutionUrl  String
+  evolutionKey  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([evolutionName])
+}
+
+model Conversation {
+  id           Int       @id @default(autoincrement())
+  contactName  String
+  contactPhone String
+  segment      Int?
+  userName     String?
+  userLine     Int? // ID da linha (mantido para compatibilidade)
+  userId       Int? // ID do operador específico que está atendendo
+  message      String    @db.Text
+  sender       Sender
+  datetime     DateTime  @default(now())
+  tabulation   Int?
+  messageType  String    @default("text")
+  mediaUrl     String?
+  archived     Boolean   @default(false) // Se true, conversa foi arquivada
+  archivedAt   DateTime? // Data de arquivamento
+  isAdminTest  Boolean   @default(false) // Se true, é ação de teste administrador e não aparece nos relatórios
+  isGroup      Boolean   @default(false) // Se true, é mensagem de grupo
+  groupId      String? // ID do grupo (remoteJid do grupo, ex: 120363123456789012@g.us)
+  groupName    String? // Nome do grupo
+  participantName String? // Nome do participante que enviou a mensagem (para grupos)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([contactPhone])
+  @@index([segment])
+  @@index([userLine])
+  @@index([userId])
+  @@index([tabulation])
+  @@index([datetime])
+  @@index([archived, datetime])
+  @@index([archivedAt])
+  @@index([isGroup])
+  @@index([groupId])
+}
+
+// Vínculo entre conversa (contactPhone + lineId) e operador por 24 horas
+// Garante que respostas sempre vão para o mesmo operador
+model ConversationOperatorBinding {
+  id           Int      @id @default(autoincrement())
+  contactPhone String
+  lineId       Int
+  userId       Int      // Operador vinculado
+  expiresAt    DateTime // Expira após 24h
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([contactPhone, lineId])
+  @@index([contactPhone, lineId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Tag {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  segment     Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([segment])
+}
+
+model ApiLog {
+  id              Int      @id @default(autoincrement())
+  endpoint        String
+  method          String
+  requestPayload  String   @db.Text
+  responsePayload String   @db.Text
+  statusCode      Int
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+  @@index([endpoint])
+  @@index([method])
+  @@index([statusCode])
+  @@index([createdAt])
+}
+
+// Template para mensagens de campanha (vinculado a segmento)
+model Template {
+  id            Int      @id @default(autoincrement())
+  name          String
+  language      String   @default("pt_BR")
+  category      String   @default("MARKETING")
+  segmentId     Int? // null = global (todos os segmentos)
+  lineId        Int? // Mantido para compatibilidade (pode ser removido futuramente)
+  namespace     String?
+  status        String   @default("APPROVED")
+  headerType    String?
+  headerContent String?  @db.Text
+  bodyText      String   @db.Text
+  footerText    String?
+  buttons       String?  @db.Text
+  variables     String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+  @@index([segmentId])
+  @@index([status])
+  @@index([category])
+}
+
+// Histórico de envios de templates
+model TemplateMessage {
+  id           Int      @id @default(autoincrement())
+  templateId   Int
+  contactPhone String
+  contactName  String?
+  lineId       Int
+  status       String   @default("SENT")
+  messageId    String?
+  variables    String?  @db.Text
+  errorMessage String?
+  campaignId   Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([templateId])
+  @@index([contactPhone])
+  @@index([lineId])
+  @@index([status])
+  @@index([campaignId])
+  @@index([createdAt])
+}
+
+// Painel de Controle - Configurações globais do sistema
+model ControlPanel {
+  id        Int  @id @default(autoincrement())
+  segmentId Int? // null = global (todos os segmentos)
+
+  // Frases de bloqueio automático (JSON array de strings)
+  blockPhrasesEnabled Boolean @default(true) // Ativar/desativar frases de bloqueio
+  blockPhrases        String? @db.Text
+  blockTabulationId   Int? // Tabulação padrão ao bloquear
+
+  // Temporizador de CPC (em horas)
+  cpcCooldownEnabled Boolean @default(true) // Ativar/desativar temporizador de CPC
+  cpcCooldownHours   Int     @default(24)
+
+  // Reenvio - Intervalo mínimo entre campanhas para o mesmo telefone (em horas)
+  resendCooldownEnabled Boolean @default(true) // Ativar/desativar controle de reenvio
+  resendCooldownHours   Int     @default(24)
+
+  // Repescagem - Controle de mensagens seguidas do operador
+  repescagemEnabled       Boolean @default(false)
+  repescagemMaxMessages   Int     @default(2) // Quantas msgs seguidas antes de bloquear
+  repescagemCooldownHours Int     @default(24) // Tempo de espera após bloqueio
+  repescagemMaxAttempts   Int     @default(2) // Limite de repescagens (0 = ilimitado)
+
+  // Evolutions ativas - Controla quais evolutions podem ser usadas para atribuição de linhas
+  activeEvolutions String? @db.Text // JSON array de nomes de evolution (null = todas ativas)
+
+  // Mensagem automática quando cliente não responde
+  autoMessageEnabled       Boolean @default(false) // Ativar/desativar mensagem automática (desativado por padrão)
+  autoMessageHours         Int     @default(24) // Quantas horas sem resposta antes de enviar mensagem
+  autoMessageText          String? @db.Text // Texto da mensagem automática (ex: "Oi, ainda está aí?")
+  autoMessageMaxAttempts   Int     @default(1) // Quantas vezes enviar a mensagem (padrão 1)
+
+  // Modo de linha compartilhada - permite que todos os usuários compartilhem a mesma linha
+  sharedLineMode           Boolean @default(false) // Se true, mesma linha pode ser vinculada a todos os usuários e nunca desvincula
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([segmentId])
+  @@index([segmentId])
+}
+
+// Histórico de repescagem por contato
+model ContactRepescagem {
+  id             Int       @id @default(autoincrement())
+  contactPhone   String
+  operatorId     Int
+  messagesCount  Int       @default(0) // Contagem de msgs seguidas do operador
+  attempts       Int       @default(0) // Quantidade de repescagens realizadas
+  blockedUntil   DateTime? // Bloqueado até essa data
+  permanentBlock Boolean   @default(false) // Se true, só libera se cliente responder
+  lastMessageAt  DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([contactPhone, operatorId])
+  @@index([contactPhone])
+  @@index([operatorId])
+  @@index([blockedUntil])
+}
+
+// Histórico de envio para controle de reenvio
+model SendHistory {
+  id           Int      @id @default(autoincrement())
+  contactPhone String
+  campaignId   Int?
+  lineId       Int?
+  sentAt       DateTime @default(now())
+
+  @@index([contactPhone])
+  @@index([sentAt])
+}
+
+// Fila de mensagens quando não há operador online
+model MessageQueue {
+  id           Int       @id @default(autoincrement())
+  contactPhone String
+  contactName  String?
+  message      String    @db.Text
+  messageType  String    @default("text")
+  mediaUrl     String?
+  segment      Int?
+  status       String    @default("pending") // pending, processing, sent, failed
+  attempts     Int       @default(0)
+  errorMessage String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  processedAt  DateTime?
+
+  @@index([status])
+  @@index([contactPhone])
+  @@index([segment])
+  @@index([createdAt])
+}
+
+// Eventos do sistema para acompanhamento e métricas
+model SystemEvent {
+  id        Int      @id @default(autoincrement())
+  type      String   // Tipo do evento (operator_connected, line_assigned, message_sent, etc.)
+  module    String   // Módulo que gerou o evento (websocket, lines, webhooks, etc.)
+  data      String?  @db.Text // Dados adicionais em JSON
+  userId    Int?     // ID do usuário relacionado (se aplicável)
+  severity  String   @default("info") // info, warning, error, success
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([type])
+  @@index([module])
+  @@index([userId])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+// Fila de espera para operadores sem linha disponível
+model OperatorQueue {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  segmentId      Int?
+  status         String    @default("waiting") // waiting, assigned, expired
+  priority       Int       @default(0) // Prioridade (maior = mais urgente)
+  createdAt      DateTime  @default(now())
+  assignedAt     DateTime?
+  expiresAt      DateTime?
+  assignedLineId Int?
+
+  user           User      @relation("OperatorQueueUser", fields: [userId], references: [id], onDelete: Cascade)
+  segment        Segment?  @relation("OperatorQueueSegment", fields: [segmentId], references: [id], onDelete: SetNull)
+  assignedLine   LinesStock? @relation("OperatorQueueAssignedLine", fields: [assignedLineId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, status])
+  @@index([status, priority, createdAt])
+  @@index([segmentId])
+  @@index([userId])
+}
+
+// Histórico de disponibilidade de linhas para análise e alertas
+model LineAvailabilityLog {
+  id                      Int      @id @default(autoincrement())
+  timestamp               DateTime @default(now())
+  totalActiveLines        Int
+  linesWithZeroOperators  Int
+  linesWithOneOperator    Int
+  linesWithTwoOperators   Int
+  operatorsOnline         Int
+  operatorsWithoutLine    Int
+  operatorsInQueue        Int
+  availabilityPercent     Decimal  @db.Decimal(5, 2)
+  severity                String   @default("INFO") // INFO, WARNING, CRITICAL
+
+  @@index([timestamp])
+  @@index([severity])
+}

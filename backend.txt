@@ -1,0 +1,141 @@
+Backend em NESTJS com PRISMA, POSTGRESSQL, Redis, BULLMQ, WebSockets, webhooks, docker
+
+Versões todas @Lastest
+
+enums SQL
+Roles:
+    admin
+    operator
+    supervisor
+
+Status:
+    Online
+    Offline
+
+lineStatus:
+    active
+    ban
+
+sender:
+    operator
+    contact
+
+speed:
+    fast
+    medium
+    slow
+
+Tabelas SQL
+
+users:
+    id
+    name
+    email
+    password
+    role
+    segment
+    line
+    status
+
+segments:
+    id
+    name
+
+tabulations:
+    id
+    name
+    isCPC (true or false)
+
+contacts:
+    id
+    name
+    phone
+    segment
+    cpf
+    contract 
+
+campaigns:
+    id
+    name
+    contactName
+    contactPhone
+    contactSegment
+    dateTime
+    lineReceptor
+    response (true or false)
+    speed
+
+blockList
+    id
+    name (opcional)
+    phone (opcional)
+    cpf (opcional)
+
+linesStock
+    id
+    phone
+    lineStatus
+    segment
+    linkedTo (opcional)
+    evolutionName
+    oficial (true or false)
+    token (opcional)
+    businessID (opcional)
+    numberId (opcional)
+
+evolution:
+    id
+    evolutionName
+    evolutionUrl
+    evolutionKey
+
+conversations:
+    id
+    contactName
+    contactPhone
+    segment
+    userName
+    userLine
+    message
+    sender
+    datetime
+    tabulation
+
+
+Logicas
+    Users:
+        users, são operator, admin ou supervisor, usuarios que logam e fazem o uso da plataforma, operator sómente fazem o atendimento, eles só vão ter acesso a pagina de chat para conversa com os clientes, o operator recebe as conversations que possuem a sua userLine, ele pode enviar/receber mensagens, audios, imagens e documentos. sempre que o operator faz login na plataforma o status dele deve ser setado como online, sómente operator online recebe conversas
+        supervisor pode fazer campaigns, extrair relatorios, criar tabulations, segments e contacts, além disso o supervisor tem que conseguir visualizar todas as conversas do seu segmento, para que ele supervisione seus operators, o supervisor não deve ter uma line, ele não fará atendimentos, apenas supervisionar, supervisor pode cadastrar blocklist tb
+        o admin tem o pode fazer tudo, menos atendimento, ele tb não recebera uma line, mas pode criar evolution, linestock, users, blockList e tudo mais
+
+    evolution:
+        Evolution é a parte principal para o cadastro de lines, ela precisa receber um nome qualquer, a url da evolution API e o token da Evolution API, vai ser usada para criar lines, e disparar nos webhooks as mensagens, sendo possivel criar como oficial (whatsapp Cloud api) ou não oficial (evolution), no caso de oficias precisa passar o token e o businessID e o numberId
+
+    linesStock:
+        essa é a parte mais importante da aplicação, as lines são instancia criadas na evolution API que permite essa conexão com whatsapp, as lines que estão active mas sem um linkedTo devem ficar aguardando, vamos colocar um sistema de identificação das lines, se a line for banida, vamos trocar o status para ban, remover essa line do operator e dar uma linkar uma nova line que esteja active para o operator, esse sistema tem que ser automatico, essa line só vai ser alocada para operator do mesmo segment que ela. muita atenção na criação das lines, necessario bater o QRCode da evolution para cadastrar e ja criar a instancia com o webhook da plataforma 
+
+    conversations:
+        Parte extremamente importante, conversations é a conversa do operator com o contact, onde vamos registrar cada mensagem enviada/recebida, cada mensagem enviada/recebida deve ser uma linhas, e quando tabulada, finaliza a conversa a alterar todas essas linhas com o tabulation igual, aqui tem relação direta com WebSockets e operator, cada operator só tem acesso as suas conversations, só recebe envia para elas. porém precisamos permitir a chama 1x1 do operator tb, então o operator tem que conseguir enviar uma mensagem para um numero que ele mesmo coloque na hora, gerando uma nova conversations, todas mensagem recebidas veem via webhook, onde precisamos capturalas e registralas nos lugares corretos
+
+    blockList:
+        tanto campaigns quanto conversations deve verificar se o phone ou o cpf constam na blockList, se constar o sistema deve bloquear o envio de mensagem a esse contactPhone
+    
+    campaigns:
+        parte muito importante, os usuarios devem conseguir enviar arquivo csv de campanhas massivas, com varios contacts para enviar mensagem, ao receber essa campaigns o sistema deve dividir os contact por igual para cada operator online do mesmo segment, essas mensagens devem ser enviadas aos poucos para os contacts afim de manter as linhas em pé, permita o usuario escolher entre fast, medium e slow, sendo fast 1 mensagem por online a cada 3 minutos, medium uma mensagem por online a cada 6 minutos, e slow 1 mensagem por cada online a cada 10 minutos
+        campaigns sempre precisam gerar as conversations, registrando o envio da primeira mensagem
+
+    observações:
+        campaigns precisam criar os contacts que vierem nelas
+        até 3 retrys para falhas de envios
+        cria index em algumas colunas afim de otimizar o sql
+        todos os IDS devem ser INT
+        Não crie relações entre tabelas, forgevin key e essas coisas, vamos deixar simplificado
+        
+        
+
+Resumo da aplicação:
+    Backend completo para um sistema de atendimento de multiplos usuarios a multiplos clientes. o ambiente de atendimento é o whatsapp e deve utilizar da evolution API para fazer toda a conexão, possibilante usar o canal evolution mesmo ou o WhatsApp Cloud API
+
+segurança:
+    Senhas: nunca armazenar raw — usar Argon2
+    Autenticação WebSocket: JWT com exp curto e refresh; validar token em handshake.
