@@ -1729,43 +1729,25 @@ export class LinesService {
         where: JSON.stringify(lineWhere)
       });
 
-      // Buscar todas as linhas criadas pelo ativador no período
-      const createdLines = await this.prisma.linesStock.findMany({
-        where: lineWhere,
-        select: {
-          id: true,
-          phone: true,
-          lineStatus: true,
-          createdAt: true,
-        },
+      // 1. Buscar TODAS as linhas já criadas pelo ativador (apenas IDs) para cruzar com os bans
+      // Isso corrige o problema de não contar bans de linhas antigas
+      const allActivatorLines = await this.prisma.linesStock.findMany({
+        where: { createdBy: activator.id },
+        select: { id: true }
       });
-
-      console.log(`📊 [Productivity] Encontradas ${createdLines.length} linhas para ${activator.name}`);
-
-      // Buscar eventos de banimento no sistema para ESSE ativador (ou relacionados a suas linhas) no período
-      // Usamos a tabela systemEvent para saber QUANDO a linha caiu, independente de quando foi criada
-      const eventWhere: any = {
-        type: 'line_banned',
-        module: 'lines',
-      };
-
-      if (start || end) {
-        eventWhere.createdAt = {};
-        if (start) eventWhere.createdAt.gte = start;
-        if (end) eventWhere.createdAt.lte = end;
-      }
+      const allActivatorLineIds = new Set(allActivatorLines.map(l => l.id));
 
       // Buscar eventos de banimento
       const banEvents = await (this.prisma as any).systemEvent.findMany({
         where: eventWhere,
+        orderBy: { createdAt: 'asc' }
       });
 
       // Filtrar eventos que pertencem às linhas deste ativador
-      // (O dado da linha geralmente está no campo 'data' do evento como JSON)
       const activatorBanEvents = banEvents.filter(event => {
         try {
           const eventData = JSON.parse(event.data || '{}');
-          return createdLines.some(line => line.id === eventData.lineId);
+          return allActivatorLineIds.has(eventData.lineId);
         } catch (e) {
           return false;
         }
@@ -1773,6 +1755,7 @@ export class LinesService {
 
       // Estatísticas diárias
       const dailyStats: Record<string, { created: number; banned: number }> = {};
+      const processedBansPerDay = new Set<string>(); // Chave: date_lineId
 
       // Processar criações
       createdLines.forEach(line => {
@@ -1781,11 +1764,23 @@ export class LinesService {
         dailyStats[day].created++;
       });
 
-      // Processar banimentos pelo timestamp do EVENTO (quando ocorreu o ban)
+      // Processar banimentos (DEDUPLICADO por linha/dia)
       activatorBanEvents.forEach(event => {
         const day = event.createdAt.toISOString().split('T')[0];
         if (!dailyStats[day]) dailyStats[day] = { created: 0, banned: 0 };
-        dailyStats[day].banned++;
+
+        try {
+          const lineId = JSON.parse(event.data || '{}').lineId;
+          const key = `${day}_${lineId}`;
+
+          // Só conta se essa linha ainda não foi contabilizada como banida NESTE DIA
+          if (!processedBansPerDay.has(key)) {
+            dailyStats[day].banned++;
+            processedBansPerDay.add(key);
+          }
+        } catch (e) {
+          // Ignorar erro de parse aqui
+        }
       });
 
       // Transformar dailyStats em array ordenado
