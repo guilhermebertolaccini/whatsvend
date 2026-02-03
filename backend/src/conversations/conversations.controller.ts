@@ -37,7 +37,7 @@ export class ConversationsController {
   constructor(
     private readonly conversationsService: ConversationsService,
     private readonly prisma: PrismaService
-  ) {}
+  ) { }
 
   @Post()
   @Roles(Role.admin, Role.supervisor, Role.operator)
@@ -70,14 +70,22 @@ export class ConversationsController {
 
   @Get("active")
   @Roles(Role.admin, Role.supervisor, Role.operator, Role.digital)
-  async getActiveConversations(@CurrentUser() user: any) {
+  async getActiveConversations(
+    @CurrentUser() user: any,
+    @Query("segment") segment?: string
+  ) {
     console.log(
-      `📋 [GET /conversations/active] Usuário: ${user.name} (${user.role}), line: ${user.line}, segment: ${user.segment}`
+      `📋 [GET /conversations/active] Usuário: ${user.name} (${user.role}), line: ${user.line
+      }, segment: ${user.segment}, queryParams: { segment: ${segment} }`
     );
 
-    // Admin e digital veem TODAS as conversas ativas (sem filtro)
+    // Admin e digital veem TODAS as conversas ativas (sem filtro), a menos que especifiquem um segmento
     if (user.role === Role.admin || user.role === Role.digital) {
-      return this.conversationsService.findAll({ tabulation: null });
+      const filters: any = { tabulation: null };
+      if (segment && segment !== "all") {
+        filters.segment = +segment;
+      }
+      return this.conversationsService.findAll(filters);
     }
     // Supervisor vê apenas conversas ativas do seu segmento
     if (user.role === Role.supervisor) {
@@ -238,8 +246,7 @@ export class ConversationsController {
       );
 
       console.log(
-        `📄 Encontradas ${
-          conversation?.length || 0
+        `📄 Encontradas ${conversation?.length || 0
         } mensagens para o telefone ${phone}`
       );
 
@@ -328,9 +335,8 @@ export class ConversationsController {
       const stream = Readable.from(pdfBuffer);
       return new StreamableFile(stream, {
         type: "application/pdf",
-        disposition: `attachment; filename=conversa-${phone}-${
-          new Date().toISOString().split("T")[0]
-        }.pdf`,
+        disposition: `attachment; filename=conversa-${phone}-${new Date().toISOString().split("T")[0]
+          }.pdf`,
       });
     } catch (error) {
       console.error("❌ Erro ao gerar PDF:", error);

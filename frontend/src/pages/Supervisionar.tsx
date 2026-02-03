@@ -107,7 +107,15 @@ export default function Supervisionar() {
         setIsLoading(true);
       }
 
-      const data = await conversationsService.getActive();
+      let segmentParam: number | undefined = undefined;
+      // Se for supervisor, usa o segmento do usuário (já tratado no backend, mas pode mandar explícito)
+      if (user?.role === "supervisor" && user.segmentId) {
+        segmentParam = user.segmentId;
+      } else if (selectedSegment !== "all") {
+        segmentParam = Number(selectedSegment);
+      }
+
+      const data = await conversationsService.getActive(segmentParam);
 
       // Group conversations by contact phone
       const groupedMap = new Map<string, ConversationGroup>();
@@ -176,7 +184,7 @@ export default function Supervisionar() {
       setIsLoading(false);
       isFirstLoad.current = false;
     }
-  }, []); // Sem dependências - usa ref
+  }, [user, selectedSegment]); // Recarregar quando user ou segmento mudar
 
   useEffect(() => {
     loadOperators();

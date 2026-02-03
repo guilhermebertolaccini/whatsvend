@@ -579,8 +579,9 @@ export const conversationsService = {
     });
   },
 
-  getActive: async (): Promise<Conversation[]> => {
-    return apiRequest<Conversation[]>('/conversations/active');
+  getActive: async (segment?: number): Promise<Conversation[]> => {
+    const query = segment ? `?segment=${segment}` : '';
+    return apiRequest<Conversation[]>(`/conversations/active${query}`);
   },
 
   getTabulated: async (): Promise<Conversation[]> => {
