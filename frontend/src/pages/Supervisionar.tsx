@@ -26,8 +26,10 @@ import { toast } from "@/hooks/use-toast";
 import {
   conversationsService,
   usersService,
+  segmentsService,
   Conversation as APIConversation,
   User,
+  Segment,
   API_BASE_URL,
   getAuthToken,
 } from "@/services/api";
@@ -47,20 +49,35 @@ interface ConversationGroup {
 export default function Supervisionar() {
   const [conversations, setConversations] = useState<ConversationGroup[]>([]);
   const [operators, setOperators] = useState<User[]>([]);
+  const [segments, setSegments] = useState<Segment[]>([]);
   const [selectedConversation, setSelectedConversation] =
     useState<ConversationGroup | null>(null);
   const [selectedOperator, setSelectedOperator] = useState("all");
+  const [selectedSegment, setSelectedSegment] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [operatorSearch, setOperatorSearch] = useState("");
 
   const { user } = useAuth();
+
+  const loadSegments = useCallback(async () => {
+    try {
+      const data = await segmentsService.list();
+      setSegments(data);
+    } catch (error) {
+      console.error("Error loading segments:", error);
+    }
+  }, []);
 
   const loadOperators = useCallback(async () => {
     try {
       const params: any = { role: "operator" };
       if (user?.role === "supervisor" && user.segmentId) {
         params.segment = user.segmentId;
-      } // Para supervisor e digital, filtrar por domínio de email
+      } else if (selectedSegment !== "all") {
+        params.segment = Number(selectedSegment);
+      }
+
+      // Para supervisor e digital, filtrar por domínio de email
       if (user?.role === "supervisor" || user?.role === "digital") {
         const emailDomain = user.email.split("@")[1];
         if (emailDomain) {
@@ -72,7 +89,7 @@ export default function Supervisionar() {
     } catch (error) {
       console.error("Error loading operators:", error);
     }
-  }, [user]);
+  }, [user, selectedSegment]);
 
   // Ref para evitar loop infinito
   const selectedPhoneRef = useRef<string | null>(null);
@@ -164,7 +181,8 @@ export default function Supervisionar() {
   useEffect(() => {
     loadOperators();
     loadConversations();
-  }, [loadOperators, loadConversations]);
+    loadSegments();
+  }, [loadOperators, loadConversations, loadSegments]);
 
   // Set initial selectedOperator based on user role
   useEffect(() => {
@@ -188,11 +206,11 @@ export default function Supervisionar() {
     selectedOperator === "all"
       ? conversations
       : conversations.filter((c) => {
-          const operator = operators.find(
-            (o) => o.id.toString() === selectedOperator
-          );
-          return operator && c.operatorName === operator.name;
-        });
+        const operator = operators.find(
+          (o) => o.id.toString() === selectedOperator
+        );
+        return operator && c.operatorName === operator.name;
+      });
 
   const filteredOperators = operators.filter((op) =>
     op.name.toLowerCase().includes(operatorSearch.toLowerCase())
@@ -223,6 +241,26 @@ export default function Supervisionar() {
                 className="pl-10"
               />
             </div>
+            {/* Segment Select - Only for Admins/Digitals who aren't bound to one segment */}
+            {user?.role !== "supervisor" && (
+              <Select
+                value={selectedSegment}
+                onValueChange={setSelectedSegment}
+              >
+                <SelectTrigger className="mb-2">
+                  <SelectValue placeholder="Todas as Carteiras" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as Carteiras</SelectItem>
+                  {segments.map((segment) => (
+                    <SelectItem key={segment.id} value={String(segment.id)}>
+                      {segment.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
             <Select
               value={selectedOperator}
               onValueChange={setSelectedOperator}
@@ -270,7 +308,7 @@ export default function Supervisionar() {
                       "w-full p-3 rounded-xl text-left transition-colors",
                       "hover:bg-primary/5",
                       selectedConversation?.contactPhone ===
-                        conv.contactPhone && "bg-primary/10"
+                      conv.contactPhone && "bg-primary/10"
                     )}
                   >
                     <div className="flex items-start gap-3">
@@ -366,9 +404,8 @@ export default function Supervisionar() {
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement("a");
                           a.href = url;
-                          a.download = `conversa-${
-                            selectedConversation.contactPhone
-                          }-${format(new Date(), "yyyy-MM-dd")}.pdf`;
+                          a.download = `conversa-${selectedConversation.contactPhone
+                            }-${format(new Date(), "yyyy-MM-dd")}.pdf`;
                           document.body.appendChild(a);
                           a.click();
                           document.body.removeChild(a);

@@ -118,16 +118,29 @@ export default function Usuarios() {
     isActive: true,
   });
 
-  // Load data on mount
+  const [selectedRole, setSelectedRole] = useState<string>("all");
+  const [selectedSegment, setSelectedSegment] = useState<string>("all");
+
+  // Load data on mount and when filters change
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedRole, selectedSegment]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
+      const listParams: any = {};
+
+      if (selectedRole !== "all") {
+        listParams.role = mapRoleToApi(selectedRole);
+      }
+
+      if (selectedSegment !== "all") {
+        listParams.segment = Number(selectedSegment);
+      }
+
       const [usersData, segmentsData, linesData] = await Promise.all([
-        usersService.list(),
+        usersService.list(listParams),
         segmentsService.list(),
         linesService.list(),
       ]);
@@ -165,6 +178,9 @@ export default function Usuarios() {
       setIsLoading(false);
     }
   };
+
+
+
 
   const columns: Column<User>[] = [
     { key: "name", label: "Nome" },
@@ -603,32 +619,71 @@ export default function Usuarios() {
     <MainLayout>
       <div className="h-full overflow-y-auto scrollbar-content">
         <div className="animate-fade-in">
-          <div className="mb-4 flex justify-end gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleUploadCSV}
-              className="hidden"
-              id="csv-upload-users"
-            />
-            <Button
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Importando...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Importar CSV
-                </>
-              )}
-            </Button>
+          <div className="mb-4 flex flex-col md:flex-row md:justify-between gap-4">
+            <div className="w-full md:w-64">
+              <Select
+                value={selectedRole}
+                onValueChange={setSelectedRole}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por Perfil" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Perfis</SelectItem>
+                  <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="supervisor">Supervisor</SelectItem>
+                  <SelectItem value="operador">Operador</SelectItem>
+                  <SelectItem value="ativador">Ativador</SelectItem>
+                  <SelectItem value="digital">Digital</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="w-full md:w-64">
+              <Select
+                value={selectedSegment}
+                onValueChange={setSelectedSegment}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por Carteira" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as Carteiras</SelectItem>
+                  {segments.map((segment) => (
+                    <SelectItem key={segment.id} value={String(segment.id)}>
+                      {segment.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleUploadCSV}
+                className="hidden"
+                id="csv-upload-users"
+              />
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar CSV
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
           <CrudTable
             title="Usuários"
