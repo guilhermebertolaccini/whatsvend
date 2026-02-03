@@ -1729,6 +1729,32 @@ export class LinesService {
         where: JSON.stringify(lineWhere)
       });
 
+      // Buscar todas as linhas criadas pelo ativador no período
+      const createdLines = await this.prisma.linesStock.findMany({
+        where: lineWhere,
+        select: {
+          id: true,
+          phone: true,
+          lineStatus: true,
+          createdAt: true,
+        },
+      });
+
+      console.log(`📊 [Productivity] Encontradas ${createdLines.length} linhas para ${activator.name}`);
+
+      // Buscar eventos de banimento no sistema para ESSE ativador (ou relacionados a suas linhas) no período
+      // Usamos a tabela systemEvent para saber QUANDO a linha caiu, independente de quando foi criada
+      const eventWhere: any = {
+        type: 'line_banned',
+        module: 'lines',
+      };
+
+      if (start || end) {
+        eventWhere.createdAt = {};
+        if (start) eventWhere.createdAt.gte = start;
+        if (end) eventWhere.createdAt.lte = end;
+      }
+
       // 1. Buscar TODAS as linhas já criadas pelo ativador (apenas IDs) para cruzar com os bans
       // Isso corrige o problema de não contar bans de linhas antigas
       const allActivatorLines = await this.prisma.linesStock.findMany({
