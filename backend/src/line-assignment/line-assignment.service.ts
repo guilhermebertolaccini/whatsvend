@@ -158,6 +158,7 @@ export class LineAssignmentService {
         where: { name: 'Padrão' },
       });
 
+      // Buscar as últimas 8 linhas ativas disponíveis
       const availableLines = await this.controlPanelService.filterLinesByActiveEvolutions(
         await this.prisma.linesStock.findMany({
           where: {
@@ -166,6 +167,7 @@ export class LineAssignmentService {
           orderBy: {
             createdAt: 'desc', // Priorizar as últimas linhas cadastradas
           },
+          take: 8, // Limitar busca às últimas 8 linhas ativas conforme regra de negócio
           include: {
             operators: {
               include: {

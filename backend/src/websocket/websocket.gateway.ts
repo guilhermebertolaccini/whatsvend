@@ -801,7 +801,8 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           // Enviar template via TemplatesService - com retry automático e realocação de linha para QUALQUER erro
           let templateResult;
           let templateAttempt = 0;
-          const maxTemplateRetries = 3;
+          const maxTemplateRetries = 8;
+          const failedLineIds: number[] = [];
 
           while (templateAttempt < maxTemplateRetries) {
             console.log(`🔄 [WebSocket] Tentativa ${templateAttempt + 1}/${maxTemplateRetries} de enviar template via linha ${currentLineId}`);
@@ -827,7 +828,14 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             templateAttempt++;
             console.warn(`⚠️ [WebSocket] Erro ao enviar template (tentativa ${templateAttempt}/${maxTemplateRetries}): ${templateResult.error || 'Erro desconhecido'}. Realocando linha...`);
 
-            const reallocationResult = await this.lineAssignmentService.reallocateLineForOperator(user.id, user.segment, currentLineId);
+            failedLineIds.push(currentLineId); // Adicionar linha atual à lista de falhas para não pegar de volta
+
+            const reallocationResult = await this.lineAssignmentService.reallocateLineForOperator(
+              user.id,
+              user.segment,
+              currentLineId,
+              failedLineIds // Passar lista de exclusão acumulada
+            );
 
             if (reallocationResult.success && reallocationResult.lineId && reallocationResult.lineId !== currentLineId) {
               currentLineId = reallocationResult.lineId;
