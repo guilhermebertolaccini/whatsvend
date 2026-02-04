@@ -298,16 +298,14 @@ export class LineAssignmentService {
       try {
         await this.linesService.assignOperatorToLine(candidateLine.id, userId);
 
-        // REGRA IMPORTANTE: Linha ganha segmento do operador na primeira vinculação
-        // - Se linha tinha segmento null: recebe o segmento do operador
-        // - Se linha era do segmento "Padrão": recebe o segmento do operador
-        // - Depois disso, o segmento da linha NUNCA mais pode ser alterado
-        const shouldUpdateSegment =
+        // REMOVIDO: Linha não deve mais ganhar segmento do operador automaticamente
+        // O sistema foi alterado para que apenas admins possam trocar o segmento da linha manualmente
+        /*
+        if (
           (candidateLine.segment === null ||
             (defaultSegment && candidateLine.segment === defaultSegment.id)) &&
-          userSegment !== null;
-
-        if (shouldUpdateSegment) {
+          userSegment
+        ) {
           await this.prisma.linesStock.update({
             where: { id: candidateLine.id },
             data: { segment: userSegment },
@@ -319,6 +317,7 @@ export class LineAssignmentService {
             { lineId: candidateLine.id, previousSegment: candidateLine.segment, newSegment: userSegment },
           );
         }
+        */
 
         this.logger.log(
           `Linha ${candidateLine.phone} atribuída ao operador ${user.name}`,

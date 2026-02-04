@@ -335,6 +335,7 @@ export class LinesService {
       },
       include: {
         operators: {
+          orderBy: { createdAt: 'desc' }, // Ordenar por data de vinculação (mais recente primeiro)
           include: {
             user: {
               select: {
@@ -974,7 +975,9 @@ export class LinesService {
 
             availableLine = defaultLines.find(l => l.operators.length < 2);
 
+            // REMOVIDO: Linha não deve mais ganhar segmento do operador automaticamente
             // Se encontrou linha padrão, atribuir ao segmento do operador
+            /*
             if (availableLine && operator.segment) {
               await this.prisma.linesStock.update({
                 where: { id: availableLine.id },
@@ -982,6 +985,7 @@ export class LinesService {
               });
               console.log(`🔄 [handleDisconnectedLine] Linha padrão ${availableLine.phone} atribuída ao segmento do operador (ID: ${operator.segment})`);
             }
+            */
           }
         }
 

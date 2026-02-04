@@ -23,7 +23,7 @@ import {
 import { QrCode, Loader2, RefreshCw } from "lucide-react";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { toast } from "@/hooks/use-toast";
-import { linesService, segmentsService, evolutionService, type Line as ApiLine, type Segment, type Evolution } from "@/services/api";
+import { linesService, segmentsService, evolutionService, getAuthToken, type Line as ApiLine, type Segment, type Evolution } from "@/services/api";
 
 interface Line {
   id: string;
@@ -66,6 +66,20 @@ export default function Linhas() {
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [qrCodeLineId, setQrCodeLineId] = useState<number | null>(null); // ID da linha sendo escaneada
   const { playSuccessSound, playErrorSound, playWarningSound } = useNotificationSound();
+
+  const [userRole, setUserRole] = useState<string>("");
+
+  useEffect(() => {
+    const token = getAuthToken();
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserRole(payload.role || "");
+      } catch (e) {
+        console.error("Error decoding token", e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -208,11 +222,10 @@ export default function Linhas() {
         }
         return (
           <div className="flex flex-col gap-1">
-            {line.operators.map((op) => (
-              <span key={op.id} className="text-sm">
-                {op.name}
-              </span>
-            ))}
+            {/* Mostrar apenas o último operador vinculado (o backend já retorna ordenado por data DESC) */}
+            <span key={line.operators[0].id} className="text-sm">
+              {line.operators[0].name}
+            </span>
           </div>
         );
       }
@@ -444,7 +457,11 @@ export default function Linhas() {
       </div>
       <div className="space-y-2">
         <Label htmlFor="segment">Segmento</Label>
-        <Select value={formData.segment} onValueChange={(value) => setFormData({ ...formData, segment: value })}>
+        <Select
+          value={formData.segment}
+          onValueChange={(value) => setFormData({ ...formData, segment: value })}
+          disabled={userRole !== 'admin'}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Selecione um segmento" />
           </SelectTrigger>
