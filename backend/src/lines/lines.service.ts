@@ -482,6 +482,10 @@ export class LinesService {
     const currentLine = await this.findOne(id);
 
     // PROTEÇÃO: Segmento da linha NÃO pode ser alterado após definido
+    // Verificação de segmento removida para permitir que ADMINS alterem manualmente.
+    // O controller já garante que apenas ADMINS chamem este método.
+
+    /*
     // Somente linhas com segmento null ou "Padrão" podem mudar de segmento (atribuição inicial)
     if (updateLineDto.segment !== undefined && updateLineDto.segment !== currentLine.segment) {
       const defaultSegment = await this.prisma.segment.findUnique({
@@ -499,17 +503,16 @@ export class LinesService {
       }
 
       // Se está tentando voltar para Padrão/Null vindo de um segmento específico, já cairia no IF acima.
-      // Aqui tratamos o caso de tentar setar Null/Padrão explicitamente (embora já devesse estar em null/padrão)
       const isNewDefaultOrNull = updateLineDto.segment === null || updateLineDto.segment === defaultSegment?.id;
 
-      // Se a linha já saiu do estado "Padrão/Null", ela nunca mais pode voltar para ele
-      // (Isso é um reforço da lógica acima, garantindo que mesmo se currentLine.segment fosse algo estranho)
-      if (!isCurrentDefaultOrNull && isNewDefaultOrNull) {
+      if (isNewDefaultOrNull && !isCurrentDefaultOrNull) {
+        // (Isso é um reforço da lógica acima, garantindo que mesmo se currentLine.segment fosse algo estranho)
         throw new BadRequestException(
           'Não é possível retornar uma linha vinculada para o segmento Padrão ou deixá-la sem segmento.'
         );
       }
     }
+    */
 
     // Se receiveMedia foi alterado, reconfigurar webhook
     if (updateLineDto.receiveMedia !== undefined && updateLineDto.receiveMedia !== currentLine.receiveMedia) {
