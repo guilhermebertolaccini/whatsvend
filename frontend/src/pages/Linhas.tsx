@@ -67,19 +67,21 @@ export default function Linhas() {
   const [qrCodeLineId, setQrCodeLineId] = useState<number | null>(null); // ID da linha sendo escaneada
   const { playSuccessSound, playErrorSound, playWarningSound } = useNotificationSound();
 
-  const [userRole, setUserRole] = useState<string>("");
-
-  useEffect(() => {
+  const [userRole, setUserRole] = useState<string>(() => {
     const token = getAuthToken();
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setUserRole(payload.role || "");
+        return payload.role || "";
       } catch (e) {
         console.error("Error decoding token", e);
+        return "";
       }
     }
-  }, []);
+    return "";
+  });
+
+  // useEffect(() => { ... }) removido pois inicializamos no state lazy
 
   useEffect(() => {
     loadData();
@@ -147,10 +149,20 @@ export default function Linhas() {
           operators: l.operators || []
         };
       });
-      setAllLines(mappedLines);
+
+      // Filtrar linhas visualmente baseadas no papel do usuário
+      // Se não for admin, só pode ver linhas ATIVAS (ou conectando)
+      // O requisito foi "só as conectadas", mas ocultar "connecting" seria ruim para UX de quem acabou de adicionar.
+      // Vou manter active e connecting. Ocultar banned e disconnected.
+      let visibleLines = mappedLines;
+      if (userRole && userRole !== 'admin') {
+        visibleLines = mappedLines.filter(l => l.status === 'active' || l.status === 'connecting');
+      }
+
+      setAllLines(visibleLines);
 
       // Aplicar filtro local se necessário
-      let filtered = mappedLines;
+      let filtered = visibleLines;
       if (statusFilter !== 'all') {
         filtered = filtered.filter(l => l.status === statusFilter);
       }
@@ -580,7 +592,7 @@ export default function Linhas() {
           type="button"
           variant="outline"
           className="w-full text-whatsapp border-whatsapp hover:bg-whatsapp/10"
-          onClick={handleShowQrCode}
+          onClick={() => handleShowQrCode()}
         >
           <QrCode className="mr-2 h-4 w-4" />
           Ver QR Code
@@ -625,9 +637,13 @@ export default function Linhas() {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="active">Ativas</SelectItem>
-                  <SelectItem value="connecting">Em Conexão</SelectItem>
-                  <SelectItem value="disconnected">Desconectadas</SelectItem>
-                  <SelectItem value="banned">Banidas</SelectItem>
+                  {userRole === 'admin' && (
+                    <>
+                      <SelectItem value="connecting">Em Conexão</SelectItem>
+                      <SelectItem value="disconnected">Desconectadas</SelectItem>
+                      <SelectItem value="banned">Banidas</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -682,7 +698,7 @@ export default function Linhas() {
                     <p>2. Toque em "Dispositivos conectados"</p>
                     <p>3. Escaneie este QR Code</p>
                   </div>
-                  <Button variant="outline" onClick={handleShowQrCode} className="mt-4">
+                  <Button variant="outline" onClick={() => handleShowQrCode()} className="mt-4">
                     <RefreshCw className="mr-2 h-4 w-4" />
                     Atualizar QR Code
                   </Button>
@@ -711,7 +727,7 @@ export default function Linhas() {
                   </div>
                   <p className="text-lg font-medium text-destructive">Erro ao gerar QR Code</p>
                   <p className="text-muted-foreground mt-2">Aguarde alguns segundos e tente novamente.</p>
-                  <Button variant="outline" onClick={handleShowQrCode} className="mt-4">
+                  <Button variant="outline" onClick={() => handleShowQrCode()} className="mt-4">
                     <RefreshCw className="mr-2 h-4 w-4" />
                     Tentar novamente
                   </Button>
