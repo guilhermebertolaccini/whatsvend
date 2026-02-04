@@ -337,6 +337,9 @@ export default function Linhas() {
         lineData.lineStatus = formData.lineStatus;
       }
 
+      // Helper para buscar nome do segmento
+      const getSegmentName = (segId?: number | null) => segId ? segments.find(s => s.id === segId)?.name : null;
+
       if (editingLine) {
         const updated = await linesService.update(Number(editingLine.id), lineData);
         const newStatus = updated.lineStatus === 'active' ? 'active' : (updated.lineStatus === 'connecting' ? 'connecting' : 'banned');
@@ -346,7 +349,9 @@ export default function Linhas() {
           status: newStatus as 'active' | 'connecting' | 'banned',
           type: (updated.oficial ? 'official' : 'evolution') as 'official' | 'evolution',
           evolutionName: updated.evolutionName,
-          segment: updated.segment ?? undefined
+          segment: updated.segment ?? undefined,
+          segmentName: getSegmentName(updated.segment),
+          operators: l.operators // Manter operadores existentes
         } : l));
         playSuccessSound();
         toast({
@@ -362,7 +367,9 @@ export default function Linhas() {
           status: newStatus as 'active' | 'connecting' | 'banned',
           type: (created.oficial ? 'official' : 'evolution') as 'official' | 'evolution',
           evolutionName: created.evolutionName,
-          segment: created.segment ?? undefined
+          segment: created.segment ?? undefined,
+          segmentName: getSegmentName(created.segment),
+          operators: []
         }]);
         playSuccessSound();
         toast({
