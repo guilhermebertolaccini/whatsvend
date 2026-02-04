@@ -151,12 +151,10 @@ export default function Linhas() {
       });
 
       // Filtrar linhas visualmente baseadas no papel do usuário
-      // Se não for admin, só pode ver linhas ATIVAS (ou conectando)
-      // O requisito foi "só as conectadas", mas ocultar "connecting" seria ruim para UX de quem acabou de adicionar.
-      // Vou manter active e connecting. Ocultar banned e disconnected.
+      // Se não for admin nem ativador, só pode ver linhas ATIVAS (requisito estrito)
       let visibleLines = mappedLines;
-      if (userRole && userRole !== 'admin') {
-        visibleLines = mappedLines.filter(l => l.status === 'active' || l.status === 'connecting');
+      if (userRole && userRole !== 'admin' && userRole !== 'ativador') {
+        visibleLines = mappedLines.filter(l => l.status === 'active');
       }
 
       setAllLines(visibleLines);
@@ -246,7 +244,17 @@ export default function Linhas() {
 
   const handleAdd = () => {
     setEditingLine(null);
-    setFormData({ phone: '', segment: '', evolutionId: '', isOfficial: false, token: '', businessId: '', numberId: '', receiveMedia: false, lineStatus: 'connecting' });
+    let initialSegment = '';
+
+    // Se for ativador, preencher automaticamente com segmento "Padrão"
+    if (userRole === 'ativador') {
+      const defaultSeg = segments.find(s => s.name === 'Padrão');
+      if (defaultSeg) {
+        initialSegment = String(defaultSeg.id);
+      }
+    }
+
+    setFormData({ phone: '', segment: initialSegment, evolutionId: '', isOfficial: false, token: '', businessId: '', numberId: '', receiveMedia: false, lineStatus: 'connecting' });
     setIsFormOpen(true);
   };
 
@@ -637,7 +645,7 @@ export default function Linhas() {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="active">Ativas</SelectItem>
-                  {userRole === 'admin' && (
+                  {(userRole === 'admin' || userRole === 'ativador') && (
                     <>
                       <SelectItem value="connecting">Em Conexão</SelectItem>
                       <SelectItem value="disconnected">Desconectadas</SelectItem>
