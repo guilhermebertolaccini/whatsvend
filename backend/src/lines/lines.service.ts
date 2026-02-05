@@ -305,65 +305,81 @@ export class LinesService {
   }
 
   async findAll(filters?: any) {
-    // Remover campos inválidos que não existem no schema
-    const { search, lineStatus, ...validFilters } = filters || {};
+    try {
+      // Remover campos inválidos que não existem no schema e extrair conhecidos
+      const { search, lineStatus, segment, ...validFilters } = filters || {};
 
-    // Construir where clause
-    const where: any = { ...validFilters };
+      // Construir where clause
+      const where: any = { ...validFilters };
 
-    // Aplicar filtro de status se fornecido
-    if (lineStatus) {
-      // Mapear "banned" (frontend) para "ban" (banco de dados)
-      if (lineStatus === 'banned') {
-        where.lineStatus = 'ban';
-      } else {
-        where.lineStatus = lineStatus;
+      // Aplicar filtro de status se fornecido
+      if (lineStatus && lineStatus !== 'all') {
+        // Mapear "banned" (frontend) para "ban" (banco de dados)
+        if (lineStatus === 'banned') {
+          where.lineStatus = 'ban';
+        } else {
+          where.lineStatus = lineStatus;
+        }
       }
-    }
 
-    // Se houver busca por texto, aplicar filtros
-    if (search) {
-      where.OR = [
-        { phone: { contains: search, mode: 'insensitive' } },
-        { evolutionName: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+      // Aplicar filtro de segmento se fornecido
+      if (segment && segment !== 'all') {
+        const segId = Number(segment);
+        if (!isNaN(segId)) {
+          where.segment = segId;
+        }
+      }
 
-    // Buscar segmentos para mapeamento
-    const segments = await this.prisma.segment.findMany();
-    const segmentMap = new Map(segments.map(s => [s.id, s]));
+      // Se houver busca por texto, aplicar filtros
+      if (search) {
+        where.OR = [
+          { phone: { contains: search, mode: 'insensitive' } },
+          { evolutionName: { contains: search, mode: 'insensitive' } },
+        ];
+      }
 
-    const lines = await this.prisma.linesStock.findMany({
-      where,
-      orderBy: {
-        createdAt: 'desc',
-      },
-      include: {
-        operators: {
-          orderBy: { createdAt: 'desc' }, // Ordenar por data de vinculação (mais recente primeiro)
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+      console.log('🔍 [LinesService.findAll] Filters received:', filters);
+      console.log('🔍 [LinesService.findAll] Where clause built:', JSON.stringify(where, null, 2));
+
+      // Buscar segmentos para mapeamento
+      const segments = await this.prisma.segment.findMany();
+      const segmentMap = new Map(segments.map(s => [s.id, s]));
+
+      const lines = await this.prisma.linesStock.findMany({
+        where,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          operators: {
+            orderBy: { createdAt: 'desc' }, // Ordenar por data de vinculação (mais recente primeiro)
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    // Mapear para incluir operadores vinculados e nome do segmento
-    return lines.map(line => ({
-      ...line,
-      segmentName: line.segment ? segmentMap.get(line.segment)?.name : null,
-      operators: line.operators.map(lo => ({
-        id: lo.user.id,
-        name: lo.user.name,
-        email: lo.user.email,
-      })),
-    }));
+      // Mapear para incluir operadores vinculados e nome do segmento
+      return lines.map(line => ({
+        ...line,
+        segmentName: line.segment ? segmentMap.get(line.segment)?.name : null,
+        operators: line.operators.map(lo => ({
+          id: lo.user.id,
+          name: lo.user.name,
+          email: lo.user.email,
+        })),
+      }));
+    } catch (error) {
+      console.error('❌ [LinesService.findAll] Error:', error);
+      throw error;
+    }
   }
 
   async findOne(id: number) {
@@ -496,9 +512,9 @@ export class LinesService {
       const defaultSegment = await this.prisma.segment.findUnique({
         where: { name: 'Padrão' },
       });
-
+ 
       const isCurrentDefaultOrNull = currentLine.segment === null || currentLine.segment === defaultSegment?.id;
-
+ 
       if (!isCurrentDefaultOrNull) {
         // Linha já tem um segmento específico definido e não pode ser alterada nem voltar a ser padrão
         throw new BadRequestException(
@@ -506,10 +522,10 @@ export class LinesService {
           'Uma vez que a linha é vinculada a um segmento, ela permanece travada a ele permanentemente.'
         );
       }
-
+ 
       // Se está tentando voltar para Padrão/Null vindo de um segmento específico, já cairia no IF acima.
       const isNewDefaultOrNull = updateLineDto.segment === null || updateLineDto.segment === defaultSegment?.id;
-
+ 
       if (isNewDefaultOrNull && !isCurrentDefaultOrNull) {
         // (Isso é um reforço da lógica acima, garantindo que mesmo se currentLine.segment fosse algo estranho)
         throw new BadRequestException(
