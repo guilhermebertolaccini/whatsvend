@@ -12,6 +12,7 @@ import { RateLimitingModule } from '../rate-limiting/rate-limiting.module';
 import { LineReputationModule } from '../line-reputation/line-reputation.module';
 import { LoggerModule } from '../logger/logger.module';
 import { PhoneValidationModule } from '../phone-validation/phone-validation.module';
+import { LinesModule } from '../lines/lines.module';
 
 @Module({
   imports: [
@@ -25,10 +26,12 @@ import { PhoneValidationModule } from '../phone-validation/phone-validation.modu
     RateLimitingModule,
     LineReputationModule,
     LoggerModule,
+    LoggerModule,
     PhoneValidationModule,
+    LinesModule,
   ],
   controllers: [CampaignsController],
   providers: [CampaignsService, CampaignsProcessor, PrismaService],
   exports: [CampaignsService],
 })
-export class CampaignsModule {}
+export class CampaignsModule { }

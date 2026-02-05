@@ -26,16 +26,17 @@ export class CampaignsProcessor {
     private lineReputationService: LineReputationService,
     private logger: AppLoggerService,
     private phoneValidationService: PhoneValidationService,
-  ) {}
+    private linesService: LinesService,
+  ) { }
 
   @Process('send-campaign-message')
   async handleSendMessage(job: Job) {
-    const { 
-      campaignId, 
-      contactName, 
-      contactPhone, 
-      contactSegment, 
-      lineId, 
+    const {
+      campaignId,
+      contactName,
+      contactPhone,
+      contactSegment,
+      lineId,
       message,
       useTemplate,
       templateId,
@@ -55,7 +56,7 @@ export class CampaignsProcessor {
       }
 
       // Buscar a linha
-      const line = await this.prisma.linesStock.findUnique({
+      let line = await this.prisma.linesStock.findUnique({
         where: { id: lineId },
       });
 
@@ -87,7 +88,7 @@ export class CampaignsProcessor {
       }
 
       // Buscar evolução
-      const evolution = await this.prisma.evolution.findUnique({
+      let evolution = await this.prisma.evolution.findUnique({
         where: { evolutionName: line.evolutionName },
       });
 
@@ -95,7 +96,7 @@ export class CampaignsProcessor {
         throw new Error('Evolution não encontrada');
       }
 
-      const instanceName = `line_${line.phone.replace(/\D/g, '')}`;
+      let instanceName = `line_${line.phone.replace(/\D/g, '')}`;
       // Normalizar telefone (remover espaços, hífens, adicionar 55 se necessário)
       const cleanPhone = this.phoneValidationService.cleanPhone(contactPhone);
 
@@ -117,8 +118,8 @@ export class CampaignsProcessor {
 
             // Substituir variáveis no template
             let templateText = template.bodyText;
-            const variables: TemplateVariable[] = templateVariables ? 
-              (typeof templateVariables === 'string' ? JSON.parse(templateVariables) : templateVariables) 
+            const variables: TemplateVariable[] = templateVariables ?
+              (typeof templateVariables === 'string' ? JSON.parse(templateVariables) : templateVariables)
               : [];
 
             variables.forEach((v: TemplateVariable, index: number) => {
@@ -221,6 +222,59 @@ export class CampaignsProcessor {
 
           console.log(`✅ Mensagem ${useTemplate ? '(template)' : ''} enviada para ${contactPhone}`);
         } catch (error) {
+          // LÓGICA DE RETRY INTELIGENTE COM TROCA DE LINHA
+          try {
+            // 1. Verificar saúde da linha atual na API
+            const health = await this.linesService.verifyLineHealth(lineId);
+
+            if (health.status !== 'active') { // Banida, desconectada ou offline
+              this.logger.warn(
+                `⚠️ Linha ${lineId} identificada como ${health.status} após erro. Tentando trocar...`,
+                'CampaignsProcessor',
+                { campaignId, lineId }
+              );
+
+              // 2. Tentar encontrar outra linha ativa do mesmo segmento
+              const replacementLine = await this.prisma.linesStock.findFirst({
+                where: {
+                  segment: contactSegment,
+                  lineStatus: 'active',
+                  id: { not: lineId }
+                }
+              });
+
+              if (replacementLine) {
+                // Buscar evolution da nova linha
+                const newEvolution = await this.prisma.evolution.findUnique({
+                  where: { evolutionName: replacementLine.evolutionName }
+                });
+
+                if (newEvolution) {
+                  this.logger.log(
+                    `🔄 Trocando para linha ${replacementLine.phone} (${replacementLine.id})`,
+                    'CampaignsProcessor'
+                  );
+
+                  // Atualizar variáveis para a próxima iteração
+                  lineId = replacementLine.id;
+                  line = replacementLine;
+                  evolution = newEvolution;
+                  instanceName = `line_${line.phone.replace(/\D/g, '')}`;
+
+                  // Não incrementar retries, pois a falha foi da linha anterior
+                  // O loop vai rodar de novo com a nova linha
+                  continue;
+                }
+              } else {
+                this.logger.warn('❌ Nenhuma linha reserva disponível para substituição.', 'CampaignsProcessor');
+              }
+            } else {
+              this.logger.log(`✅ Linha ${lineId} verificada e está saudável. Tentando novamente na mesma linha.`, 'CampaignsProcessor');
+            }
+          } catch (verifyError) {
+            console.error('Erro ao verificar/trocar linha:', verifyError);
+          }
+
           retries++;
           console.error(`Tentativa ${retries} falhou para ${contactPhone}:`, error.message);
 
