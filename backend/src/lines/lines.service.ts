@@ -331,13 +331,20 @@ export class LinesService {
       }
 
       // Aplicar filtro de data (criação)
-      if (date) {
+      // Aplicar filtro de data (criação)
+      if (date && typeof date === 'string') {
+        const dateStr = date.trim();
         // Garantir que a data seja interpretada corretamente (YYYY-MM-DD -> Start/End of Day)
-        const startDate = new Date(date);
-        const endDate = new Date(date);
+        // Adicionamos T00:00:00 para forçar local time ou tratamos como UTC
+        // Vamos assumir que o input date envia YYYY-MM-DD (ex: 2026-02-04)
 
-        // Ajustar para dia seguinte para pegar o range completo do dia
-        // Ex: date="2025-02-05" -> Start="2025-02-05T00:00:00.000Z", End="2025-02-06T00:00:00.000Z"
+        // Criar data baseada na string. 
+        // new Date("2026-02-04") cria em UTC. 
+        // new Date("2026-02-04T00:00:00") cria em Local Time do servidor.
+        const startDate = new Date(dateStr);
+        const endDate = new Date(dateStr);
+
+        // Ajustar para dia seguinte
         endDate.setDate(endDate.getDate() + 1);
 
         // Validar se data é válida
@@ -346,6 +353,8 @@ export class LinesService {
             gte: startDate,
             lt: endDate,
           };
+        } else {
+          console.warn(`⚠️ [LinesService.findAll] Data inválida recebida: ${date}`);
         }
       }
 
