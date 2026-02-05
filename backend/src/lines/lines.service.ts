@@ -313,7 +313,12 @@ export class LinesService {
 
     // Aplicar filtro de status se fornecido
     if (lineStatus) {
-      where.lineStatus = lineStatus;
+      // Mapear "banned" (frontend) para "ban" (banco de dados)
+      if (lineStatus === 'banned') {
+        where.lineStatus = 'ban';
+      } else {
+        where.lineStatus = lineStatus;
+      }
     }
 
     // Se houver busca por texto, aplicar filtros

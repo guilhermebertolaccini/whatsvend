@@ -50,6 +50,7 @@ export default function Linhas() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<Line | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [segmentFilter, setSegmentFilter] = useState<string>('all');
   const [formData, setFormData] = useState({
     phone: '',
     segment: '',
@@ -86,7 +87,7 @@ export default function Linhas() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, segmentFilter]);
 
   // Polling automático para detectar conexão bem-sucedida
   useEffect(() => {
@@ -122,9 +123,15 @@ export default function Linhas() {
     setIsLoading(true);
     try {
       const params: any = {};
+
+      // Filtros de API
       if (statusFilter !== 'all') {
         params.lineStatus = statusFilter;
       }
+      if (segmentFilter !== 'all') {
+        params.segment = segmentFilter;
+      }
+
       const [linesData, segmentsData, evolutionsData] = await Promise.all([
         linesService.list(params),
         segmentsService.list(),
@@ -159,12 +166,19 @@ export default function Linhas() {
 
       setAllLines(visibleLines);
 
-      // Aplicar filtro local se necessário
-      let filtered = visibleLines;
-      if (statusFilter !== 'all') {
-        filtered = filtered.filter(l => l.status === statusFilter);
-      }
-      setLines(filtered);
+      // Aplicar filtro local APENAS se não tiver sido filtrado na API (para garantir consistência)
+      // Como a API já filtra, aqui só precisamos setar as linhas retornadas.
+      // MAS, se o filtro statusFilter for 'banned', a API retorna 'ban', o mappedLines entende.
+      // E se segment for passado, a API retorna filtrado.
+      // Portanto, setLines(visibleLines) deve bastar se a API fizer o trabalho.
+      // No entanto, para ser seguro e reativo (caso 'visibleLines' tenha lógica extra de UserRole), mantemos filtragem local se necessário.
+
+      // Como visibleLines já vem filtrado pela API (via linesData), 
+      // precisariamos apenas filtrar o que a API NÃO filtrou.
+      // Mas status e segment JÁ FORAM ENVIADOS.
+      // Então 'visibleLines' já deve conter apenas o desejado.
+
+      setLines(visibleLines);
 
       setSegments(segmentsData);
       setEvolutions(evolutionsData);
