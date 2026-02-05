@@ -832,6 +832,14 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
 
             // VERIFICAÇÃO RIGOROSA: Checar se a linha está banida na Evolution
             let markAsBanned = false;
+
+            // 1. Checar mensagem de erro textual (igual mensagem normal)
+            const errorMessage = typeof templateResult.error === 'string' ? templateResult.error.toLowerCase() : JSON.stringify(templateResult.error).toLowerCase();
+            if (errorMessage.includes('ban') || errorMessage.includes('blocked') || errorMessage.includes('disconnect') || errorMessage.includes('closed')) {
+              console.warn(`⚠️ [WebSocket] Erro indica banimento/desconexão: "${templateResult.error}". Marcando como BANIDA.`);
+              markAsBanned = true;
+            }
+
             try {
               const currentLineCheck = await this.prisma.linesStock.findUnique({ where: { id: currentLineId } });
               if (currentLineCheck) {
@@ -857,7 +865,6 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
               }
             } catch (healthError) {
               console.warn(`⚠️ [WebSocket] Erro ao verificar saúde da linha ${currentLineId}: ${healthError.message}`);
-              // Se deu erro 404/500 na evolution, pode estar fora do ar, mas por segurança não banimos imediatamente sem certeza
             }
 
             const reallocationResult = await this.lineAssignmentService.reallocateLineForOperator(
@@ -894,6 +901,17 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           // Se saiu do loop sem sucesso, verificar se foi porque esgotou tentativas
           if (!templateResult.success) {
             console.error(`❌ [WebSocket] Não foi possível enviar template após ${templateAttempt} tentativa(s)`);
+
+            // "Exhaustion Ban": Se falhou todas as vezes, banir a última linha tentada (igual mensagem normal)
+            if (templateAttempt >= maxTemplateRetries) {
+              console.error(`❌ [WebSocket] TODAS as tentativas falharam. Marcando linha ${currentLineId} como banida por exaustão (semelhante a mensagem normal).`);
+              try {
+                await this.linesService.handleBannedLine(currentLineId);
+              } catch (banError) {
+                console.error(`❌ [WebSocket] Erro ao banir linha por exaustão:`, banError);
+              }
+            }
+
             return { error: templateResult.error || 'Erro desconhecido ao enviar template após múltiplas tentativas' };
           }
 
