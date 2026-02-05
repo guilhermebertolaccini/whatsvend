@@ -1040,6 +1040,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       const tryReallocateAndResend = async (sendFunction: () => Promise<any>, maxRetries: number = 3): Promise<any> => {
         let attempt = 0;
         let lastError: any = null;
+        let failedLineIds: number[] = []; // Acumular IDs de linhas falhas
 
         while (attempt < maxRetries) {
           try {
@@ -1052,6 +1053,8 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             const errorMessage = error.response?.data?.message || error.message;
 
             console.warn(`⚠️ [WebSocket] Erro ao enviar (tentativa ${attempt}/${maxRetries}). Linha ${currentLineId}. Erro: ${errorStatus} - ${errorMessage}`);
+
+            failedLineIds.push(currentLineId); // Registrar linha atual como falha
 
             // Verificar se erro indica problema com a linha (ban, disconnected) ou outro erro
             // Erros 400 podem ser: linha banida, número inválido, mensagem inválida, etc.
