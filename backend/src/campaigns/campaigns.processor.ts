@@ -228,9 +228,9 @@ export class CampaignsProcessor {
             // 1. Verificar saúde da linha atual na API
             const health = await this.linesService.verifyLineHealth(lineId);
 
-            if (health.status !== 'active') { // Banida, desconectada ou offline
+            if (health.newStatus !== 'active') { // Banida, desconectada ou offline
               this.logger.warn(
-                `⚠️ Linha ${lineId} identificada como ${health.status} após erro. Tentando trocar...`,
+                `⚠️ Linha ${lineId} identificada como ${health.newStatus} após erro. Tentando trocar...`,
                 'CampaignsProcessor',
                 { campaignId, lineId }
               );
