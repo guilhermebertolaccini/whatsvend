@@ -312,6 +312,12 @@ export class LinesService {
       // Construir where clause
       const where: any = { ...validFilters };
 
+      // Garantir que campos extraídos não estejam no where
+      delete where.date;
+      delete where.segment;
+      delete where.search;
+      delete where.lineStatus;
+
       // Aplicar filtro de status se fornecido
       if (lineStatus && lineStatus !== 'all') {
         // Mapear "banned" (frontend) para "ban" (banco de dados)
