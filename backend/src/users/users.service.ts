@@ -13,7 +13,7 @@ import { Readable } from "stream";
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(createUserDto: CreateUserDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -26,11 +26,24 @@ export class UsersService {
 
     const hashedPassword = await argon2.hash(createUserDto.password);
 
-    return this.prisma.user.create({
-      data: {
-        ...createUserDto,
-        password: hashedPassword,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          ...createUserDto,
+          password: hashedPassword,
+        },
+      });
+
+      if (createUserDto.line) {
+        await tx.lineOperator.create({
+          data: {
+            userId: user.id,
+            lineId: createUserDto.line,
+          },
+        });
+      }
+
+      return user;
     });
   }
 
@@ -59,12 +72,12 @@ export class UsersService {
     // Se houver busca por texto, aplicar filtros
     const where = search
       ? {
-          ...convertedFilters,
-          OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { email: { contains: search, mode: "insensitive" } },
-          ],
-        }
+        ...convertedFilters,
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+        ],
+      }
       : convertedFilters;
 
     return this.prisma.user.findMany({
@@ -134,23 +147,45 @@ export class UsersService {
 
     console.log("💾 Dados limpos para atualizar:", cleanData);
 
-    return this.prisma.user.update({
-      where: { id },
-      data: cleanData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        segment: true,
-        line: true,
-        status: true,
-        oneToOneActive: true,
-        identifier: true,
-        createdAt: true,
-        updatedAt: true,
-        // Não retornar password
-      },
+    return this.prisma.$transaction(async (tx) => {
+      // Se linha foi alterada, atualizar LineOperator
+      if (cleanData.line !== undefined) { // Pode ser null
+        // 1. Remover vínculos antigos deste usuário
+        await tx.lineOperator.deleteMany({
+          where: { userId: id },
+        });
+
+        // 2. Se nova linha definida, criar vínculo
+        if (cleanData.line) {
+          await tx.lineOperator.create({
+            data: {
+              userId: id,
+              lineId: cleanData.line,
+            },
+          });
+        }
+      }
+
+      // 3. Atualizar usuário
+      const updatedUser = await tx.user.update({
+        where: { id },
+        data: cleanData,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          segment: true,
+          line: true,
+          status: true,
+          oneToOneActive: true,
+          identifier: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      return updatedUser;
     });
   }
 
@@ -251,8 +286,7 @@ export class UsersService {
 
               if (!name || !email) {
                 errors.push(
-                  `Linha ignorada: Nome ou E-mail vazio (${
-                    name || "sem nome"
+                  `Linha ignorada: Nome ou E-mail vazio (${name || "sem nome"
                   }, ${email || "sem email"})`
                 );
                 continue;

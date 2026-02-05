@@ -14,10 +14,10 @@ export class LinesSchedulerService {
   ) { }
 
   /**
-   * Job que verifica a saúde de TODAS as linhas a cada 30 minutos.
+   * Job que verifica a saúde das linhas ATIVAS a cada 10 minutos.
    * Executa verifyLineHealth (force check na Evolution).
    */
-  @Cron('*/30 * * * *')
+  @Cron('*/10 * * * *')
   async verifyAllLines() {
     if (this.isRunning) {
       this.logger.warn('⚠️ Job de verificação de linhas já está rodando. Pulando execução.');
@@ -25,13 +25,12 @@ export class LinesSchedulerService {
     }
 
     this.isRunning = true;
-    this.logger.log('🕵️‍♂️ [LinesScheduler] Iniciando verificação periódica de TODAS as linhas...');
+    this.logger.log('🕵️‍♂️ [LinesScheduler] Iniciando verificação periódica de linhas ATIVAS...');
 
     try {
-      // Buscar todas as linhas (sem filtros)
-      // Usar LinesService.findAll ou Prisma direto?
-      // O LinesService.findAll retorna DTOs complexos. Vamos usar Prisma direto para ser mais leve e pegar só o ID.
+      // Buscar APENAS linhas ativas para otimizar e garantir que bans sejam detectados rápido
       const allLines = await this.prisma.linesStock.findMany({
+        where: { lineStatus: 'active' },
         select: { id: true, phone: true }
       });
 
