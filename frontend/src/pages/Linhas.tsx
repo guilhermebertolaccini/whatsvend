@@ -51,6 +51,7 @@ export default function Linhas() {
   const [editingLine, setEditingLine] = useState<Line | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [segmentFilter, setSegmentFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<string>('');
   const [formData, setFormData] = useState({
     phone: '',
     segment: '',
@@ -87,7 +88,7 @@ export default function Linhas() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, segmentFilter]);
+  }, [statusFilter, segmentFilter, dateFilter]);
 
   // Polling automático para detectar conexão bem-sucedida
   useEffect(() => {
@@ -130,6 +131,9 @@ export default function Linhas() {
       }
       if (segmentFilter !== 'all') {
         params.segment = segmentFilter;
+      }
+      if (dateFilter) {
+        params.date = dateFilter;
       }
 
       const [linesData, segmentsData, evolutionsData] = await Promise.all([
