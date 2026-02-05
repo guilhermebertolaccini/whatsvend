@@ -25,7 +25,7 @@ import { Roles } from "../common/decorators/roles.decorator";
 @Controller("templates")
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TemplatesController {
-  constructor(private readonly templatesService: TemplatesService) {}
+  constructor(private readonly templatesService: TemplatesService) { }
 
   /**
    * CRUD de Templates
@@ -90,11 +90,21 @@ export class TemplatesController {
 
   @Patch(":id")
   @Roles("admin", "supervisor")
-  update(
+  async update(
     @Param("id", ParseIntPipe) id: number,
-    @Body() updateTemplateDto: UpdateTemplateDto
+    @Body() body: any
   ) {
-    return this.templatesService.update(id, updateTemplateDto);
+    console.log(`📥 [Templates] Update Received for ID ${id}:`, JSON.stringify(body, null, 2));
+
+    // Manual casting/bypass for debugging
+    const updateTemplateDto = body as UpdateTemplateDto;
+
+    try {
+      return await this.templatesService.update(id, updateTemplateDto);
+    } catch (error) {
+      console.error(`❌ [Templates] Error in update service:`, error);
+      throw error;
+    }
   }
 
   @Delete(":id")
