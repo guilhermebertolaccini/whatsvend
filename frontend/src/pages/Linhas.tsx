@@ -707,6 +707,23 @@ export default function Linhas() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="flex items-center gap-2">
+              <Label htmlFor="segmentFilter">Carteira:</Label>
+              <Select value={segmentFilter} onValueChange={setSegmentFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Todas as carteiras" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {segments.map((segment) => (
+                    <SelectItem key={segment.id} value={String(segment.id)}>
+                      {segment.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <CrudTable
             title="Linhas WhatsApp"
