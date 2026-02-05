@@ -307,7 +307,7 @@ export class LinesService {
   async findAll(filters?: any) {
     try {
       // Remover campos inválidos que não existem no schema e extrair conhecidos
-      const { search, lineStatus, segment, ...validFilters } = filters || {};
+      const { search, lineStatus, segment, date, ...validFilters } = filters || {};
 
       // Construir where clause
       const where: any = { ...validFilters };
@@ -327,6 +327,25 @@ export class LinesService {
         const segId = Number(segment);
         if (!isNaN(segId)) {
           where.segment = segId;
+        }
+      }
+
+      // Aplicar filtro de data (criação)
+      if (date) {
+        // Garantir que a data seja interpretada corretamente (YYYY-MM-DD -> Start/End of Day)
+        const startDate = new Date(date);
+        const endDate = new Date(date);
+
+        // Ajustar para dia seguinte para pegar o range completo do dia
+        // Ex: date="2025-02-05" -> Start="2025-02-05T00:00:00.000Z", End="2025-02-06T00:00:00.000Z"
+        endDate.setDate(endDate.getDate() + 1);
+
+        // Validar se data é válida
+        if (!isNaN(startDate.getTime())) {
+          where.createdAt = {
+            gte: startDate,
+            lt: endDate,
+          };
         }
       }
 

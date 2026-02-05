@@ -724,6 +724,17 @@ export default function Linhas() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="flex items-center gap-2">
+              <Label htmlFor="dateFilter">Criado em:</Label>
+              <Input
+                id="dateFilter"
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-[150px]"
+              />
+            </div>
           </div>
           <CrudTable
             title="Linhas WhatsApp"
