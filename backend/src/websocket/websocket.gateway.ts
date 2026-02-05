@@ -442,244 +442,27 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       }
     }
 
-    // Se operador não tem linha, tentar atribuir automaticamente
+    // Se operador não tem linha, tentar atribuir automaticamente via serviço centralizado
+    // Isso garante respeito a todas as regras de negócio (fila, prioridades, limites de operadores)
     if (!currentLineId) {
+      console.log(`🔄 [WebSocket] Operador sem linha ao tentar enviar. Solicitando nova linha via LineAssignmentService...`);
 
-      let availableLine = null;
+      // Tentar solicitar linha (respeitando fila e limites)
+      const assignmentResult = await this.lineAssignmentService.requestLineForOperator(user.id);
 
-      // Buscar segmento "Padrão" uma única vez
-      const defaultSegment = await this.prisma.segment.findUnique({
-        where: { name: 'Padrão' },
-      });
+      if (assignmentResult.success && assignmentResult.lineId) {
+        currentLineId = assignmentResult.lineId;
+        user.line = assignmentResult.lineId;
+        console.log(`✅ [WebSocket] Linha ${assignmentResult.linePhone} atribuída automaticamente para ${user.name}`);
+      } else {
+        console.warn(`⏳ [WebSocket] Não foi possível atribuir linha automaticamente: ${assignmentResult.reason}`);
 
-      // PRIORIDADE 1: Linha do segmento do operador SEM operadores
-      if (user.segment && !availableLine) {
-        const segmentLines = await this.prisma.linesStock.findMany({
-          where: {
-            lineStatus: 'active',
-            segment: user.segment,
-          },
-        });
-
-        const filteredLines = await this.controlPanelService.filterLinesByActiveEvolutions(segmentLines, user.segment);
-
-        for (const line of filteredLines) {
-          const operatorsCount = await (this.prisma as any).lineOperator.count({
-            where: { lineId: line.id },
-          });
-
-          if (operatorsCount === 0) {
-            availableLine = line;
-            console.log(`📌 [WebSocket] [PRIORIDADE 1] Linha do segmento ${user.segment} sem operadores encontrada: ${line.phone}`);
-            break;
-          }
+        // Se falhar (ex: fila, sem linhas), retornar erro informativo
+        if (assignmentResult.reason?.toLowerCase().includes('fila')) {
+          return { error: 'Você foi adicionado à fila de espera. Aguarde sua vez.' };
+        } else {
+          return { error: 'Aguarde alocação de linha (nenhuma disponível no momento).' };
         }
-      }
-
-      // PRIORIDADE 2: Linha do segmento "Padrão" SEM operadores
-      if (!availableLine && defaultSegment) {
-        const defaultLines = await this.prisma.linesStock.findMany({
-          where: {
-            lineStatus: 'active',
-            segment: defaultSegment.id,
-          },
-        });
-
-        const filteredDefaultLines = await this.controlPanelService.filterLinesByActiveEvolutions(defaultLines, user.segment);
-
-        for (const line of filteredDefaultLines) {
-          const operatorsCount = await (this.prisma as any).lineOperator.count({
-            where: { lineId: line.id },
-          });
-
-          if (operatorsCount === 0) {
-            availableLine = line;
-            console.log(`📌 [WebSocket] [PRIORIDADE 2] Linha do segmento Padrão sem operadores encontrada: ${line.phone}`);
-            break;
-          }
-        }
-      }
-
-      // PRIORIDADE 3: Linha do segmento do operador COM 1 operador (dividir)
-      if (user.segment && !availableLine) {
-        const segmentLines = await this.prisma.linesStock.findMany({
-          where: {
-            lineStatus: 'active',
-            segment: user.segment,
-          },
-        });
-
-        const filteredLines = await this.controlPanelService.filterLinesByActiveEvolutions(segmentLines, user.segment);
-
-        for (const line of filteredLines) {
-          const existingOperators = await (this.prisma as any).lineOperator.findMany({
-            where: { lineId: line.id },
-            include: { user: true },
-          });
-
-          if (existingOperators.length === 1) {
-            // Verificar se o operador existente é do mesmo segmento
-            if (existingOperators[0].user.segment === user.segment) {
-              availableLine = line;
-              console.log(`📌 [WebSocket] [PRIORIDADE 3] Linha do segmento ${user.segment} com 1 operador encontrada (dividir): ${line.phone}`);
-              break;
-            }
-          }
-        }
-      }
-
-      // PRIORIDADE 4: Linha do segmento "Padrão" COM 1 operador (dividir)
-      if (!availableLine && defaultSegment) {
-        const defaultLines = await this.prisma.linesStock.findMany({
-          where: {
-            lineStatus: 'active',
-            segment: defaultSegment.id,
-          },
-        });
-
-        const filteredDefaultLines = await this.controlPanelService.filterLinesByActiveEvolutions(defaultLines, user.segment);
-
-        for (const line of filteredDefaultLines) {
-          const existingOperators = await (this.prisma as any).lineOperator.findMany({
-            where: { lineId: line.id },
-            include: { user: true },
-          });
-
-          if (existingOperators.length === 1) {
-            // Verificar se o operador existente é do mesmo segmento (ou aceitar qualquer segmento para linhas padrão)
-            const sameSegment = existingOperators[0].user.segment === user.segment;
-            if (sameSegment || user.segment === null || existingOperators[0].user.segment === null) {
-              availableLine = line;
-              console.log(`📌 [WebSocket] [PRIORIDADE 4] Linha do segmento Padrão com 1 operador encontrada (dividir): ${line.phone}`);
-              break;
-            }
-          }
-        }
-      }
-
-      // PRIORIDADE 5: APENAS se não houver linhas do segmento "Padrão" disponíveis, buscar outras linhas para dividir
-      if (!availableLine) {
-        console.log(`🔄 [WebSocket] [PRIORIDADE 5] Nenhuma linha do segmento Padrão disponível. Buscando outras linhas para dividir...`);
-
-        const anyActiveLines = await this.prisma.linesStock.findMany({
-          where: {
-            lineStatus: 'active',
-          },
-        });
-
-        const filteredAnyLines = await this.controlPanelService.filterLinesByActiveEvolutions(anyActiveLines, user.segment);
-
-        for (const line of filteredAnyLines) {
-          // Pular se for linha do segmento do operador ou do segmento "Padrão" (já tentamos acima)
-          if (line.segment === user.segment || (defaultSegment && line.segment === defaultSegment.id)) {
-            continue;
-          }
-
-          const existingOperators = await (this.prisma as any).lineOperator.findMany({
-            where: { lineId: line.id },
-            include: { user: true },
-          });
-
-          if (existingOperators.length === 1) {
-            // Verificar se o operador existente é do mesmo segmento
-            if (existingOperators[0].user.segment === user.segment) {
-              availableLine = line;
-              console.log(`📌 [WebSocket] [PRIORIDADE 5] Linha de outro segmento com 1 operador do mesmo segmento encontrada (dividir): ${line.phone}`);
-              break;
-            }
-          }
-        }
-      }
-
-      // Tentar vincular a linha encontrada
-      if (availableLine) {
-        try {
-          await this.linesService.assignOperatorToLine(availableLine.id, user.id);
-
-          // Atualizar segmento da linha se for do segmento "Padrão" e operador tem segmento
-          if (defaultSegment && availableLine.segment === defaultSegment.id && user.segment) {
-            await this.prisma.linesStock.update({
-              where: { id: availableLine.id },
-              data: { segment: user.segment },
-            });
-          }
-
-          user.line = availableLine.id;
-          currentLineId = availableLine.id;
-
-          console.log(`✅ [WebSocket] Linha ${availableLine.phone} atribuída ao operador ${user.name} (segmento ${availableLine.segment || 'sem segmento'})`);
-        } catch (error: any) {
-          console.error(`❌ [WebSocket] Erro ao vincular linha ${availableLine.id} ao operador ${user.id}:`, error.message);
-          availableLine = null;
-        }
-      }
-
-      // 4. ÚLTIMA TENTATIVA: Se ainda não tem linha, buscar linhas do segmento "Padrão" SEM filtrar por evolutions
-      // Isso garante que se há linhas padrão cadastradas, sempre encontra uma
-      if (!currentLineId) {
-        console.log(`🔄 [WebSocket] Última tentativa: buscando linhas do segmento "Padrão" sem filtro de evolutions...`);
-
-        const defaultSegment = await this.prisma.segment.findUnique({
-          where: { name: 'Padrão' },
-        });
-
-        if (defaultSegment) {
-          const defaultLines = await this.prisma.linesStock.findMany({
-            where: {
-              lineStatus: 'active',
-              segment: defaultSegment.id, // Segmento "Padrão" pelo ID
-            },
-          });
-
-          // Buscar QUALQUER linha padrão com menos de 2 operadores (SEM filtrar por evolutions)
-          for (const line of defaultLines) {
-            const currentOperatorsCount = await (this.prisma as any).lineOperator.count({
-              where: { lineId: line.id },
-            });
-
-            if (currentOperatorsCount < 2) {
-              try {
-                await this.linesService.assignOperatorToLine(line.id, user.id);
-
-                // Atualizar segmento da linha se operador tem segmento
-                if (user.segment) {
-                  await this.prisma.linesStock.update({
-                    where: { id: line.id },
-                    data: { segment: user.segment },
-                  });
-                }
-
-                user.line = line.id;
-                currentLineId = line.id;
-
-                console.log(`✅ [WebSocket] Linha padrão ${line.phone} atribuída ao operador ${user.name} (última tentativa)`);
-                break;
-              } catch (error: any) {
-                if (error.message?.includes('já está vinculado')) {
-                  user.line = line.id;
-                  currentLineId = line.id;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Se DEPOIS DE TODAS AS TENTATIVAS ainda não tem linha, fazer log mas NÃO retornar erro
-      // Em vez disso, tentar continuar (mesmo que possa falhar depois)
-      if (!currentLineId) {
-        const defaultSegment = await this.prisma.segment.findUnique({
-          where: { name: 'Padrão' },
-        });
-        const defaultSegmentId = defaultSegment?.id || null;
-
-        console.error(`❌ [WebSocket] CRÍTICO: Nenhuma linha disponível após todas as tentativas para operador ${user.name} (ID: ${user.id})`);
-        console.error(`❌ [WebSocket] Total de linhas ativas no banco: ${await this.prisma.linesStock.count({ where: { lineStatus: 'active' } })}`);
-        console.error(`❌ [WebSocket] Total de linhas do segmento "Padrão": ${defaultSegmentId ? await this.prisma.linesStock.count({ where: { lineStatus: 'active', segment: defaultSegmentId } }) : 0}`);
-        // NÃO retornar erro aqui - deixar continuar e tentar enviar mesmo assim (pode dar erro depois, mas pelo menos tentou)
-        // ATUALIZAÇÃO: Retornar erro explícito para o frontend saber que precisa aguardar alocação
-        return { error: 'Aguarde alocação de linha' };
       }
     }
 
@@ -843,24 +626,18 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
             try {
               const currentLineCheck = await this.prisma.linesStock.findUnique({ where: { id: currentLineId } });
               if (currentLineCheck) {
-                const currentEvolution = await this.prisma.evolution.findUnique({
-                  where: { evolutionName: currentLineCheck.evolutionName },
-                });
+                // USAR CHECK ATIVO (verifyLineHealth) em vez de cache
+                // Isso garante atualização imediata do banimento
+                try {
+                  const health = await this.linesService.verifyLineHealth(currentLineCheck.id);
+                  const lineStatus = health.status;
 
-                if (currentEvolution) {
-                  const instanceName = `line_${currentLineCheck.phone.replace(/\D/g, '')}`;
-                  const lineStatus = await this.healthCheckCacheService.getConnectionStatus(
-                    currentEvolution.evolutionUrl,
-                    currentEvolution.evolutionKey,
-                    instanceName
-                  );
-
-                  // Se linha está banida ou desconectada
-                  if (!lineStatus || lineStatus === 'ban' || lineStatus === 'disconnected' ||
-                    lineStatus.toLowerCase() === 'ban' || lineStatus.toLowerCase() === 'disconnected') {
-                    console.warn(`⚠️ [WebSocket] CRÍTICO: Linha ${currentLineCheck.phone} está ${lineStatus || 'desconectada'} na Evolution. Marcando como BANIDA.`);
+                  if (lineStatus !== 'active') {
+                    console.warn(`⚠️ [WebSocket] CRÍTICO: Linha ${currentLineCheck.phone} está ${lineStatus} (Verified). Marcando como BANIDA.`);
                     markAsBanned = true;
                   }
+                } catch (verifyError) {
+                  console.error(`❌ [WebSocket] Erro ao verificar linha durante retry de template:`, verifyError);
                 }
               }
             } catch (healthError) {
@@ -1037,7 +814,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       }
 
       // Função auxiliar para tentar realocar linha e reenviar (para QUALQUER erro)
-      const tryReallocateAndResend = async (sendFunction: () => Promise<any>, maxRetries: number = 3): Promise<any> => {
+      const tryReallocateAndResend = async (sendFunction: () => Promise<any>, maxRetries: number = 8): Promise<any> => {
         let attempt = 0;
         let lastError: any = null;
         let failedLineIds: number[] = []; // Acumular IDs de linhas falhas
@@ -1069,38 +846,41 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
                 });
 
                 if (currentLineCheck) {
-                  // Buscar Evolution para verificar status
-                  const currentEvolution = await this.prisma.evolution.findUnique({
-                    where: { evolutionName: currentLineCheck.evolutionName },
-                  });
+                  if (currentLineCheck) {
+                    // USAR CHECK ATIVO (verifyLineHealth) em vez de cache
+                    // Isso vai bater na API da Evolution e atualizar o status no banco se necessário
+                    try {
+                      const health = await this.linesService.verifyLineHealth(currentLineCheck.id);
+                      const lineStatus = health.status;
 
-                  if (currentEvolution) {
-                    const instanceName = `line_${currentLineCheck.phone.replace(/\D/g, '')}`;
-                    const lineStatus = await this.healthCheckCacheService.getConnectionStatus(
-                      currentEvolution.evolutionUrl,
-                      currentEvolution.evolutionKey,
-                      instanceName
-                    );
+                      // Se linha está banida ou desconectada (retornada pelo check ativo)
+                      if (lineStatus !== 'active') {
+                        console.warn(`⚠️ [WebSocket] Check Ativo confirmou: Linha ${currentLineCheck.phone} está ${lineStatus}. Marcando como banida e realocando...`);
+                        shouldReallocate = true;
+                        markLineAsBanned = true;
+                      }
+                    } catch (verifyError) {
+                      console.error(`❌ [WebSocket] Erro ao executar verifyLineHealth:`, verifyError);
+                      // Se falhar o check, assumimos que pode estar ruim se o erro original indicava isso
+                      if (errorMessage?.toLowerCase().includes('ban') || errorMessage?.toLowerCase().includes('disconnect')) {
+                        shouldReallocate = true;
+                      }
+                    }
 
-                    // Se linha está banida ou desconectada, realocar e marcar como banida
-                    if (!lineStatus || lineStatus === 'ban' || lineStatus === 'disconnected') {
-                      const statusText = lineStatus || 'desconectada';
-                      console.warn(`⚠️ [WebSocket] Linha ${currentLineCheck.phone} está ${statusText} na Evolution. Marcando como banida e realocando...`);
-                      shouldReallocate = true;
-                      // Marcar que a linha deve ser atualizada como banida
-                      markLineAsBanned = true;
-                    } else if (errorMessage?.toLowerCase().includes('ban') ||
+                    if (!shouldReallocate && (
+                      errorMessage?.toLowerCase().includes('ban') ||
                       errorMessage?.toLowerCase().includes('blocked') ||
-                      errorMessage?.toLowerCase().includes('disconnect')) {
-                      // Se a mensagem de erro menciona ban/blocked, também realocar
-                      console.warn(`⚠️ [WebSocket] Mensagem de erro indica problema com linha: ${errorMessage}`);
+                      errorMessage?.toLowerCase().includes('disconnect')
+                    )) {
+                      // Se o check disse 'active' mas o erro é explícito de ban, confiamos no erro
+                      console.warn(`⚠️ [WebSocket] Check disse Active, mas erro é explícito: ${errorMessage}`);
                       shouldReallocate = true;
-                    } else {
-                      // Erro 400 pode ser problema com número/mensagem, não necessariamente com linha
+                      markLineAsBanned = true;
+                    }
+                    // Se depois de tudo isso, NÃO for realocar, então é erro de número/mensagem
+                    if (!shouldReallocate) {
                       console.warn(`⚠️ [WebSocket] Erro ${errorStatus} pode ser problema com número/mensagem, não com linha. Verificando...`);
-                      // Tentar verificar se há outras linhas disponíveis, mas só realocar se realmente necessário
                       if (attempt >= 2) {
-                        // Na segunda tentativa, se ainda erro 400, pode ser problema com a linha
                         shouldReallocate = true;
                       }
                     }

@@ -151,23 +151,32 @@ export class LineAssignmentService {
       // 3. Linhas do segmento "Padrão" (podem ser alocadas para qualquer segmento)
       // IMPORTANTE: Linhas de outros segmentos NUNCA podem ser alocadas
 
-      const activeEvolutions = await this.controlPanelService.getActiveEvolutions();
+      // Buscar configs dos segmentos
+      let userSegmentConfig = null;
+      if (userSegment) {
+        userSegmentConfig = await this.prisma.segment.findUnique({ where: { id: userSegment } });
+      }
 
-      // Buscar segmento "Padrão" para usar na query
+      // Buscar segmento "Padrão"
       const defaultSegment = await this.prisma.segment.findUnique({
         where: { name: 'Padrão' },
       });
 
-      // Buscar as últimas 8 linhas ativas disponíveis
+      // Definir limites
+      const userMaxOperators = userSegmentConfig?.maxOperatorsPerLine || 2;
+      const defaultMaxOperators = defaultSegment?.maxOperatorsPerLine || 2;
+
+      // Buscar linhas ativas (limitado a 30 para maior pool de escolha se o limite for alto)
+      // Aumentei de 8 para 30 pois com limites maiores (ex: 5 ops por linha), precisamos ver mais linhas
       const availableLines = await this.controlPanelService.filterLinesByActiveEvolutions(
         await this.prisma.linesStock.findMany({
           where: {
             lineStatus: 'active',
           },
           orderBy: {
-            createdAt: 'desc', // Priorizar as últimas linhas cadastradas
+            createdAt: 'desc',
           },
-          take: 8, // Limitar busca às últimas 8 linhas ativas conforme regra de negócio
+          take: 30,
           include: {
             operators: {
               include: {
@@ -183,8 +192,8 @@ export class LineAssignmentService {
           },
         }),
       );
+
       // NOVA VALIDAÇÃO: Filtrar linhas disponíveis para incluir apenas as que estão Connected
-      // Verificar status de conexão de cada linha antes de tentar atribuir
       const linesWithConnectionStatus = await Promise.all(
         availableLines.map(async (line) => {
           const evolution = await this.prisma.evolution.findUnique({
@@ -198,14 +207,13 @@ export class LineAssignmentService {
           const instanceName = `line_${line.phone.replace(/\D/g, '')}`;
 
           try {
+            // Usar cache de health check para performance (já usado em websocket)
             const connectionStatus = await this.healthCheckCacheService.getConnectionStatus(
               evolution.evolutionUrl,
               evolution.evolutionKey,
               instanceName
             );
 
-            // Considerar conectada se NÃO for explicitamente desconectada/conectando
-            // 'unknown' e outros status são permitidos
             const isDisconnected = connectionStatus === 'close' ||
               connectionStatus === 'CLOSE' ||
               connectionStatus === 'disconnected' ||
@@ -219,7 +227,6 @@ export class LineAssignmentService {
 
             return { ...line, isConnected };
           } catch (error) {
-            // Em caso de erro ao verificar, considerar como não conectada
             return { ...line, isConnected: false };
           }
         })
@@ -237,18 +244,18 @@ export class LineAssignmentService {
         return { success: false, reason: 'Nenhuma linha conectada disponível' };
       }
 
-      // Usar connectedLines ao invés de availableLines nas buscas
       const linesToSearch = connectedLines;
 
-
-
-      // Prioridade 1: Linhas do segmento do operador (excluindo a linha antiga se fornecida)
+      // Prioridade 1: Linhas do segmento do operador
       let candidateLine = linesToSearch.find((line) => {
-        if (excludeLineIds && excludeLineIds.includes(line.id)) return false; // IMPORTANTE: Excluir linha antiga
+        if (excludeLineIds && excludeLineIds.includes(line.id)) return false;
 
         if (line.segment !== userSegment) return false;
-        if (line.operators.length >= 2) return false;
-        // Verificar se não mistura segmentos (NUNCA misturar)
+
+        // RESPEITAR O LIMITE DO SEGMENTO DO USUÁRIO
+        if (line.operators.length >= userMaxOperators) return false;
+
+        // Verificar se não mistura segmentos
         const hasDifferentSegment = line.operators.some(
           (op) => op.user?.segment !== userSegment,
         );
@@ -260,10 +267,12 @@ export class LineAssignmentService {
         candidateLine = linesToSearch.find((line) => {
           if (excludeLineIds && excludeLineIds.includes(line.id)) return false;
           if (line.segment !== null) return false;
-          // Segmento "Padrão" não é null, mas é tratado separadamente
           if (defaultSegment && line.segment === defaultSegment.id) return false;
-          if (line.operators.length >= 2) return false;
-          if (line.operators.length > 0) return false; // Linha null NUNCA foi usada, então não pode ter operadores
+
+          // Linhas null devem estar vazias (ou respeitar limite padrão se formos permitir compartilhamento de linhas livres, mas geralmente devem ser virgens)
+          // Regra atual: Linha null só se estiver vazia (virgem)
+          if (line.operators.length > 0) return false;
+
           return true;
         });
       }
@@ -273,7 +282,10 @@ export class LineAssignmentService {
         candidateLine = linesToSearch.find((line) => {
           if (excludeLineIds && excludeLineIds.includes(line.id)) return false;
           if (line.segment !== defaultSegment.id) return false;
-          if (line.operators.length >= 2) return false;
+
+          // RESPEITAR LIMITE DO SEGMENTO PADRÃO
+          if (line.operators.length >= defaultMaxOperators) return false;
+
           // Se já tem operadores, verificar se são do mesmo segmento
           if (line.operators.length > 0) {
             const hasDifferentSegment = line.operators.some(

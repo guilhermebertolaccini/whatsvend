@@ -484,14 +484,24 @@ export default function Usuarios() {
           <SelectContent>
             {lines
               .filter((line) => {
-                // Filtrar apenas linhas sem vínculo (que não estão atribuídas a nenhum usuário)
+                // Filtrar apenas linhas ATIVAS
+                if (line.lineStatus !== 'active') return false;
+
+                // Filtrar apenas linhas SEM OPERADORES VINCULADOS (checar dados do banco)
+                // Se a API retorna 'operators', usamos. Se não, fallback para checagem local.
+                if (line.operators && Array.isArray(line.operators)) {
+                  return line.operators.length === 0;
+                }
+
+                // Fallback (menos confiável) se o backend não retornasse operators
                 const isLineInUse = users.some((user) => user.line === line.id);
                 return !isLineInUse;
               })
               .map((line) => (
                 <SelectItem key={line.id} value={String(line.id)}>
                   {line.phone}{" "}
-                  {line.oficial ? "(Oficial)" : `(${line.evolutionName})`}
+                  {line.segmentName ? `[${line.segmentName}]` : ""}
+                  {line.oficial ? " (Oficial)" : ` (${line.evolutionName})`}
                 </SelectItem>
               ))}
           </SelectContent>
