@@ -12,7 +12,6 @@ import { OperatorQueueModule } from '../operator-queue/operator-queue.module';
 
 @Module({
   imports: [
-    ScheduleModule.forRoot(),
     forwardRef(() => WebsocketModule),
     ControlPanelModule,
     SystemEventsModule,

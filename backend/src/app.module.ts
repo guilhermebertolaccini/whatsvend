@@ -32,8 +32,11 @@ import { MessageSendingModule } from './message-sending/message-sending.module';
 import { CacheModule } from './cache/cache.module';
 import { ArchivingModule } from './archiving/archiving.module';
 
+import { ScheduleModule } from '@nestjs/schedule';
+
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -79,4 +82,4 @@ import { ArchivingModule } from './archiving/archiving.module';
   providers: [PrismaService],
   exports: [PrismaService],
 })
-export class AppModule {}
+export class AppModule { }
