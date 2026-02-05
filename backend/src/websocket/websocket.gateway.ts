@@ -826,15 +826,47 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
 
             // Se falhou (QUALQUER erro), realocar linha e tentar novamente
             templateAttempt++;
-            console.warn(`⚠️ [WebSocket] Erro ao enviar template (tentativa ${templateAttempt}/${maxTemplateRetries}): ${templateResult.error || 'Erro desconhecido'}. Realocando linha...`);
+            console.warn(`⚠️ [WebSocket] Erro ao enviar template (tentativa ${templateAttempt}/${maxTemplateRetries}): ${templateResult.error || 'Erro desconhecido'}. Verificando saúde da linha...`);
 
             failedLineIds.push(currentLineId); // Adicionar linha atual à lista de falhas para não pegar de volta
+
+            // VERIFICAÇÃO RIGOROSA: Checar se a linha está banida na Evolution
+            let markAsBanned = false;
+            try {
+              const currentLineCheck = await this.prisma.linesStock.findUnique({ where: { id: currentLineId } });
+              if (currentLineCheck) {
+                const currentEvolution = await this.prisma.evolution.findUnique({
+                  where: { evolutionName: currentLineCheck.evolutionName },
+                });
+
+                if (currentEvolution) {
+                  const instanceName = `line_${currentLineCheck.phone.replace(/\D/g, '')}`;
+                  const lineStatus = await this.healthCheckCacheService.getConnectionStatus(
+                    currentEvolution.evolutionUrl,
+                    currentEvolution.evolutionKey,
+                    instanceName
+                  );
+
+                  // Se linha está banida ou desconectada
+                  if (!lineStatus || lineStatus === 'ban' || lineStatus === 'disconnected' ||
+                    lineStatus.toLowerCase() === 'ban' || lineStatus.toLowerCase() === 'disconnected') {
+                    console.warn(`⚠️ [WebSocket] CRÍTICO: Linha ${currentLineCheck.phone} está ${lineStatus || 'desconectada'} na Evolution. Marcando como BANIDA.`);
+                    markAsBanned = true;
+                  }
+                }
+              }
+            } catch (healthError) {
+              console.warn(`⚠️ [WebSocket] Erro ao verificar saúde da linha ${currentLineId}: ${healthError.message}`);
+              // Se deu erro 404/500 na evolution, pode estar fora do ar, mas por segurança não banimos imediatamente sem certeza
+            }
 
             const reallocationResult = await this.lineAssignmentService.reallocateLineForOperator(
               user.id,
               user.segment,
               currentLineId,
-              failedLineIds // Passar lista de exclusão acumulada
+              failedLineIds, // Passar lista de exclusão acumulada
+              undefined, // traceId
+              markAsBanned // ✅ AGORA PASSAMOS O FLAG PARA BANIR SE NECESSÁRIO
             );
 
             if (reallocationResult.success && reallocationResult.lineId && reallocationResult.lineId !== currentLineId) {
