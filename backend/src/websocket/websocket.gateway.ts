@@ -630,7 +630,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
                 // Isso garante atualização imediata do banimento
                 try {
                   const health = await this.linesService.verifyLineHealth(currentLineCheck.id);
-                  const lineStatus = health.status;
+                  const lineStatus = health.newStatus;
 
                   if (lineStatus !== 'active') {
                     console.warn(`⚠️ [WebSocket] CRÍTICO: Linha ${currentLineCheck.phone} está ${lineStatus} (Verified). Marcando como BANIDA.`);
@@ -851,7 +851,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
                     // Isso vai bater na API da Evolution e atualizar o status no banco se necessário
                     try {
                       const health = await this.linesService.verifyLineHealth(currentLineCheck.id);
-                      const lineStatus = health.status;
+                      const lineStatus = health.newStatus;
 
                       // Se linha está banida ou desconectada (retornada pelo check ativo)
                       if (lineStatus !== 'active') {

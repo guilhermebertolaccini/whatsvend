@@ -8,6 +8,7 @@ import { RateLimitingService } from '../rate-limiting/rate-limiting.service';
 import { LineReputationService } from '../line-reputation/line-reputation.service';
 import { AppLoggerService } from '../logger/logger.service';
 import { PhoneValidationService } from '../phone-validation/phone-validation.service';
+import { LinesService } from '../lines/lines.service';
 import axios from 'axios';
 
 interface TemplateVariable {
@@ -31,7 +32,7 @@ export class CampaignsProcessor {
 
   @Process('send-campaign-message')
   async handleSendMessage(job: Job) {
-    const {
+    let {
       campaignId,
       contactName,
       contactPhone,
