@@ -1790,22 +1790,36 @@ export class LinesService {
     }
   }
 
-  async getAllocationsLog(limit: number = 100) {
+  async getAllocationsLog(limit: number = 50) {
+    // Buscar um número maior de eventos para garantir que tenhamos as últimas alocações de todas as linhas
+    // Se o usuário pede limit 50, buscamos 200 para ter margem de deduplicação
+    const fetchLimit = limit * 4;
+
     const events = await this.systemEventsService.findEvents({
       type: EventType.LINE_ASSIGNED,
-      limit,
+      limit: fetchLimit,
     });
 
-    return events.events.map(event => {
+    // Deduplicar por Linha (manter apenas o mais recente)
+    const uniqueAllocations = new Map<number, any>();
+
+    for (const event of events.events) {
       const data = event.data || {};
-      return {
-        id: event.id,
-        timestamp: event.createdAt,
-        operatorName: event.user?.name || 'Desconhecido',
-        segmentName: data.segmentName || 'N/A',
-        linePhone: data.phone || 'N/A',
-      };
-    });
+      const lineId = data.lineId;
+
+      if (lineId && !uniqueAllocations.has(lineId)) {
+        uniqueAllocations.set(lineId, {
+          id: event.id,
+          timestamp: event.createdAt,
+          operatorName: event.user?.name || 'Desconhecido',
+          segmentName: data.segmentName || 'N/A',
+          linePhone: data.phone || 'N/A',
+        });
+      }
+    }
+
+    // Converter Map para Array e aplicar o limite solicitado
+    return Array.from(uniqueAllocations.values()).slice(0, limit);
   }
 
   // Desvincular operador da linha
