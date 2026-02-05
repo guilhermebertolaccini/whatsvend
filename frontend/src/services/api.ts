@@ -374,6 +374,17 @@ export const linesService = {
     await apiRequest(`/lines/${id}/ban`, { method: 'POST' });
   },
 
+  verify: async (id: number): Promise<{
+    success: boolean;
+    phone: string;
+    previousStatus: string;
+    newStatus: string;
+    connectionState: string;
+    actionTaken: string;
+  }> => {
+    return apiRequest(`/lines/${id}/verify`, { method: 'POST' });
+  },
+
   delete: async (id: number): Promise<void> => {
     await apiRequest(`/lines/${id}`, { method: 'DELETE' });
   },

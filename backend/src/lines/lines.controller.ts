@@ -123,6 +123,12 @@ export class LinesController {
     return this.linesService.update(+id, updateLineDto);
   }
 
+  @Post(':id/verify')
+  @Roles(Role.admin, Role.supervisor)
+  verifyLine(@Param('id') id: string) {
+    return this.linesService.verifyLineHealth(+id);
+  }
+
   @Post(':id/ban')
   @Roles(Role.admin)
   handleBan(@Param('id') id: string) {

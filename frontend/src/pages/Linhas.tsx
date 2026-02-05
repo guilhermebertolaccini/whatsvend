@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { QrCode, Loader2, RefreshCw } from "lucide-react";
+import { QrCode, Loader2, RefreshCw, Activity } from "lucide-react";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { toast } from "@/hooks/use-toast";
 import { linesService, segmentsService, evolutionService, getAuthToken, type Line as ApiLine, type Segment, type Evolution } from "@/services/api";
@@ -471,6 +471,44 @@ export default function Linhas() {
     }
   };
 
+  const handleVerify = async (line: Line) => {
+    try {
+      toast({
+        title: "Verificando...",
+        description: `Verificando conexão da linha ${line.phone}...`,
+      });
+
+      const result = await linesService.verify(Number(line.id));
+
+      if (result.newStatus === 'active') {
+        playSuccessSound();
+        toast({
+          title: "Linha Verificada: ATIVA 🟢",
+          description: `Status: ${result.connectionState}. A linha está conectada e operante.`,
+          className: "bg-green-100 border-green-500",
+        });
+      } else {
+        playErrorSound();
+        toast({
+          title: "Linha Verificada: BANIDA/OFF 🔴",
+          description: `Status real: ${result.connectionState}. A linha foi marcada como Banida.`,
+          variant: "destructive"
+        });
+      }
+
+      // Recarregar dados para atualizar a tabela
+      loadData();
+    } catch (error) {
+      console.error('Erro ao verificar linha:', error);
+      playErrorSound();
+      toast({
+        title: "Erro na verificação",
+        description: "Não foi possível verificar a linha.",
+        variant: "destructive"
+      });
+    }
+  };
+
   const renderForm = () => (
     <div className="space-y-4 py-4">
       <div className="space-y-2">
@@ -670,15 +708,26 @@ export default function Linhas() {
             onFormOpenChange={setIsFormOpen}
             editingItem={editingLine}
             renderActions={(line) => (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-whatsapp hover:text-whatsapp"
-                onClick={() => handleShowQrCode(line)}
-                title="Ver QR Code"
-              >
-                <QrCode className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-blue-500 hover:text-blue-700"
+                  onClick={() => handleVerify(line)}
+                  title="Verificar Conexão (Forçar)"
+                >
+                  <Activity className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-whatsapp hover:text-whatsapp"
+                  onClick={() => handleShowQrCode(line)}
+                  title="Ver QR Code"
+                >
+                  <QrCode className="h-4 w-4" />
+                </Button>
+              </div>
             )}
           />
         </div>

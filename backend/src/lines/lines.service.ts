@@ -599,6 +599,99 @@ export class LinesService {
     });
   }
 
+  async verifyLineHealth(id: number) {
+    const line = await this.findOne(id);
+    const evolution = await this.prisma.evolution.findUnique({
+      where: { evolutionName: line.evolutionName },
+    });
+
+    if (!evolution) {
+      throw new NotFoundException('Evolution configuration not found for this line');
+    }
+
+    const instanceName = `line_${line.phone.replace(/\D/g, '')}`;
+
+    // 1. Limpar cache para garantir verificação fresca
+    this.healthCheckCacheService.clearCache(evolution.evolutionUrl, instanceName);
+
+    console.log(`🔍 [VerifyLine] Verificando saúde da linha ${line.phone} na Evolution...`);
+
+    let connectionState = 'unknown';
+    let responseData = null;
+
+    try {
+      // 2. Fazer requisição direta à Evolution
+      const response = await axios.get(
+        `${evolution.evolutionUrl}/instance/connectionState/${instanceName}`,
+        {
+          headers: { 'apikey': evolution.evolutionKey },
+          timeout: 10000,
+        }
+      );
+
+      responseData = response.data;
+      connectionState = response.data?.instance?.state || response.data?.state || 'unknown';
+
+      console.log(`✅ [VerifyLine] Resposta da Evolution para ${line.phone}:`, connectionState);
+    } catch (error) {
+      console.error(`❌ [VerifyLine] Erro ao verificar linha ${line.phone}:`, error.message);
+
+      // Se der 404, a instância não existe -> BAN
+      if (error.response?.status === 404) {
+        connectionState = 'disconnected';
+      }
+    }
+
+    // 3. Determinar novo status
+    const isConnected = connectionState === 'open' || connectionState === 'connected';
+    // Se "unknown", não mudamos nada para não banir falso-negativo, A MENOS que o status atual já seja ban
+    // MAS o usuário pediu "Verificar". Se der erro, deve avisar.
+
+    let newStatus = line.lineStatus;
+    let actionTaken = 'none';
+
+    if (isConnected) {
+      if (line.lineStatus !== 'active') {
+        newStatus = 'active';
+        actionTaken = 'activated';
+      }
+    } else {
+      // Se não está conectado (close, ban, disconnected, etc)
+      if (['close', 'ban', 'disconnected', 'refused'].includes(connectionState) || connectionState === 'unknown') {
+        // Se explicitamente desconectado, banir.
+        // Se "unknown" (erro de conexão com evolution), talvez manter como está?
+        // O usuário quer FORÇAR. Se a Evolution não responde, não dá pra garantir que está ativo.
+        // Vamos ser agressivos: Se não for 'open', é ban.
+        if (line.lineStatus !== 'ban') {
+          newStatus = 'ban';
+          actionTaken = 'banned';
+        }
+      }
+    }
+
+    // 4. Atualizar no Banco
+    if (newStatus !== line.lineStatus) {
+      if (newStatus === 'ban') {
+        await this.handleBannedLine(id); // Usa a lógica completa de banimento (desvincular operadores)
+      } else {
+        await this.prisma.linesStock.update({
+          where: { id },
+          data: { lineStatus: newStatus },
+        });
+      }
+    }
+
+    return {
+      success: true,
+      phone: line.phone,
+      previousStatus: line.lineStatus,
+      newStatus: newStatus,
+      connectionState: connectionState,
+      actionTaken: actionTaken,
+      evolutionResponse: responseData
+    };
+  }
+
   // Lógica automática de troca de linhas banidas
   async handleBannedLine(lineId: number) {
     const line = await this.findOne(lineId);
