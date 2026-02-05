@@ -902,13 +902,18 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           if (!templateResult.success) {
             console.error(`❌ [WebSocket] Não foi possível enviar template após ${templateAttempt} tentativa(s)`);
 
-            // "Exhaustion Ban": Se falhou todas as vezes, banir a última linha tentada (igual mensagem normal)
+            // "Exhaustion Ban": Se falhou todas as vezes, BANIR TODAS AS LINHAS TENTADAS
             if (templateAttempt >= maxTemplateRetries) {
-              console.error(`❌ [WebSocket] TODAS as tentativas falharam. Marcando linha ${currentLineId} como banida por exaustão (semelhante a mensagem normal).`);
-              try {
-                await this.linesService.handleBannedLine(currentLineId);
-              } catch (banError) {
-                console.error(`❌ [WebSocket] Erro ao banir linha por exaustão:`, banError);
+              const allFailedLines = [...new Set([...failedLineIds, currentLineId])]; // Garantir que linha atual também entre
+              console.error(`❌ [WebSocket] TODAS as ${maxTemplateRetries} tentativas falharam. Banindo TODAS as ${allFailedLines.length} linhas tentadas por exaustão total.`);
+
+              for (const lineIdToBan of allFailedLines) {
+                try {
+                  console.log(`🚫 [WebSocket] Banindo linha ${lineIdToBan} por exaustão...`);
+                  await this.linesService.handleBannedLine(lineIdToBan);
+                } catch (banError) {
+                  console.error(`❌ [WebSocket] Erro ao banir linha ${lineIdToBan} por exaustão:`, banError);
+                }
               }
             }
 
@@ -1170,17 +1175,21 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
               console.warn(`⚠️ [WebSocket] Erro não relacionado à linha. Não será feita realocação.`);
             }
 
-            // Se não conseguiu realocar ou já tentou todas as vezes, marcar linha como banida e lançar erro
+            // Exhaustion Ban (Se falhou tudo, BANIR TODAS AS LINHAS TENTADAS)
             if (attempt >= maxRetries) {
-              // SEMPRE marcar linha como banida após todas as tentativas falharem
-              console.error(`❌ [WebSocket] Todas as tentativas falharam. Marcando linha ${currentLineId} como banida.`);
-              try {
-                await this.linesService.handleBannedLine(currentLineId);
-                console.log(`✅ [WebSocket] Linha ${currentLineId} marcada como banida após falha de envio.`);
-              } catch (banError: any) {
-                console.error(`❌ [WebSocket] Erro ao marcar linha como banida:`, banError.message);
+              const allFailedLines = [...new Set([...failedLineIds, currentLineId])];
+              console.error(`❌ [WebSocket] TODAS as ${maxRetries} tentativas falharam. Banindo TODAS as ${allFailedLines.length} linhas tentadas por exaustão total.`);
+
+              for (const lineIdToBan of allFailedLines) {
+                try {
+                  console.log(`🚫 [WebSocket] Banindo linha ${lineIdToBan} por exaustão...`);
+                  await this.linesService.handleBannedLine(lineIdToBan);
+                } catch (banError) {
+                  console.error(`❌ [WebSocket] Erro ao banir linha ${lineIdToBan} por exaustão:`, banError);
+                }
               }
-              throw new Error(`Não foi possível enviar após ${maxRetries} tentativas. Último erro: ${errorMessage || 'Erro desconhecido'}`);
+
+              throw lastError || new Error(`Falha ao enviar mensagem após ${maxRetries} tentativas. Último erro: ${lastError?.message || 'Desconhecido'}`);
             }
           }
         }

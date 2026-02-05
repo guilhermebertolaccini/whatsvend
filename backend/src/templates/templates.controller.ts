@@ -90,21 +90,10 @@ export class TemplatesController {
 
   @Patch(":id")
   @Roles("admin", "supervisor")
-  async update(
-    @Param("id", ParseIntPipe) id: number,
-    @Body() body: any
-  ) {
-    console.log(`📥 [Templates] Update Received for ID ${id}:`, JSON.stringify(body, null, 2));
-
-    // Manual casting/bypass for debugging
-    const updateTemplateDto = body as UpdateTemplateDto;
-
-    try {
-      return await this.templatesService.update(id, updateTemplateDto);
-    } catch (error) {
-      console.error(`❌ [Templates] Error in update service:`, error);
-      throw error;
-    }
+  @Patch(":id")
+  @Roles("admin", "supervisor")
+  update(@Param("id", ParseIntPipe) id: number, @Body() updateTemplateDto: UpdateTemplateDto) {
+    return this.templatesService.update(id, updateTemplateDto);
   }
 
   @Delete(":id")
