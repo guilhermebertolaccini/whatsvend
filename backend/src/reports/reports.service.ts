@@ -2703,7 +2703,7 @@ export class ReportsService {
         "Tipo": type,
         "Data": dateStr,
         "Hora": dateObj.toLocaleTimeString('pt-BR'),
-        "Conteúdo": conv.message || ''
+        "Conteúdo": (conv.message || '').replace(/[\r\n]+/g, ' ')
       };
     });
 
