@@ -1413,6 +1413,14 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
 
       const endTime = Date.now();
       console.log(`⏱️ [WebSocket] handleSendMessage concluído em ${endTime - startTime}ms - User: ${user.name}, ContactPhone: ${data.contactPhone}`);
+
+      // VERIFICAÇÃO PÓS-ENVIO: Checar saúde da linha para atualizar status (banido/conectado)
+      if (currentLineId) {
+        this.linesService.verifyLineHealth(currentLineId).catch(err => {
+          console.error(`❌ [WebSocket] Erro ao verificar saúde da linha ${currentLineId} pós-envio:`, err);
+        });
+      }
+
       return { success: true, conversation };
     } catch (error: any) {
       console.error(`❌ [WebSocket] ERRO ao enviar mensagem - User: ${user.name}, ContactPhone: ${data.contactPhone}, IsGroup: ${data.contactPhone?.includes('@g.us')}`, {

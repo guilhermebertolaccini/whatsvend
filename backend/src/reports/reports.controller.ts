@@ -99,6 +99,12 @@ export class ReportsController {
     return this.reportsService.getMessagesPerOperatorReport(this.applySegmentFilter(filters, user), user.identifier);
   }
 
+  @Get('ativadores')
+  @Roles('admin', 'supervisor')
+  async getActivatorReport(@Query() filters: ReportFilterDto) {
+    return this.reportsService.getActivatorReport(filters);
+  }
+
   @Get('completo-csv')
   @Roles('admin', 'supervisor', 'digital')
   async getCompletoCsvReport(@Query() filters: ReportFilterDto, @CurrentUser() user: any) {

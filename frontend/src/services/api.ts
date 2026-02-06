@@ -1022,6 +1022,7 @@ const reportEndpoints: Record<string, string> = {
   'usuarios': 'usuarios',
   'hiper_personalizado': 'hiper-personalizado',
   'consolidado': 'consolidado',
+  'ativadores': 'ativadores',
 };
 
 // Helper para converter array de objetos em CSV

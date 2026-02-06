@@ -43,6 +43,7 @@ const reportTypes: ReportType[] = [
   { value: "usuarios", label: "Usuários" },
   { value: "hiper_personalizado", label: "Hiper Personalizado" },
   { value: "consolidado", label: "Consolidado" },
+  { value: "ativadores", label: "Ativadores (Linhas Criadas)", adminOnly: true },
 ];
 
 // Helper para formatar data como YYYY-MM-DD

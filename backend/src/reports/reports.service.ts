@@ -2709,4 +2709,47 @@ export class ReportsService {
 
     return formattedResults;
   }
-}
+
+  /**
+   * Relatório: Detalhado de Ativadores (Linhas Criadas)
+   * Colunas: Ativador, Linha, Segmento, Data de Criação
+   */
+  async getActivatorReport(filters: ReportFilterDto) {
+    const whereClause: any = {
+      createdAt: {
+        gte: new Date(`${filters.startDate}T00:00:00`),
+        lte: new Date(`${filters.endDate}T23:59:59.999`),
+      },
+      createdBy: { not: null } // Apenas linhas com criador registrado
+    };
+
+    if (filters.segment) {
+      whereClause.segment = filters.segment;
+    }
+
+    const lines = await this.prisma.linesStock.findMany({
+      where: whereClause,
+      include: {
+        creator: {
+          select: { name: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const segments = await this.prisma.segment.findMany();
+    const segmentMap = new Map(segments.map(s => [s.id, s.name]));
+
+    return lines.map(line => {
+      const segmentName = line.segment ? segmentMap.get(line.segment) : 'Sem Segmento';
+
+      return {
+        "Ativador": line.creator?.name || 'Desconhecido',
+        "Linha": line.phone,
+        "Segmento": segmentName,
+        "Data de Criação": new Date(line.createdAt).toLocaleDateString('pt-BR') + ' ' + new Date(line.createdAt).toLocaleTimeString('pt-BR'),
+        "Status": line.lineStatus
+      };
+    });
+  }
+}}
