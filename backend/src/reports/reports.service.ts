@@ -2637,18 +2637,19 @@ export class ReportsService {
 
     this.applyIdentifierFilter(whereClause, userIdentifier, 'conversation');
 
-    // 3. Buscar agredado por Operador + Tipo de Envio (Sender)
-    // Prisma groupBy não suporta incluir relation (User), então faremos em duas etapas
+    // 3. Buscar agredado por Operador + Linha + Tipo de Envio (Sender)
+    // Agrupamos também por 'userLine'
     const groupedStats = await this.prisma.conversation.groupBy({
-      by: ['userId', 'sender'],
+      by: ['userId', 'userLine', 'sender'],
       where: whereClause,
       _count: {
         id: true,
       },
     });
 
-    // 4. Buscar detalhes dos operadores
+    // 4. Buscar detalhes dos operadores e das linhas
     const operatorIds = [...new Set(groupedStats.map(s => s.userId).filter(id => id !== null))] as number[];
+    const lineIds = [...new Set(groupedStats.map(s => s.userLine).filter(id => id !== null))] as number[];
 
     const operators = await this.prisma.user.findMany({
       where: { id: { in: operatorIds } },
@@ -2660,42 +2661,57 @@ export class ReportsService {
       },
     });
 
+    const lines = await this.prisma.linesStock.findMany({
+      where: { id: { in: lineIds } },
+      select: {
+        id: true,
+        phone: true,
+        evolutionName: true // Útil para identificar
+      }
+    });
+
     const segments = await this.prisma.segment.findMany();
     const segmentMap = new Map(segments.map(s => [s.id, s.name]));
     const operatorMap = new Map(operators.map(u => [u.id, u]));
+    const lineMap = new Map(lines.map(l => [l.id, l]));
 
     // 5. Consolidar dados
-    // Estrutura final: Map<userId, { name, segment, sent, received }>
-    const reportData = new Map<number, any>();
+    // Estrutura final: Array de objetos flat para CSV
+    // Chave composta para Map auxiliar: `${userId}-${userLine}`
+    const reportData = new Map<string, any>();
 
-    // Inicializar mapa com todos os operadores encontrados
-    operatorIds.forEach(id => {
-      const op = operatorMap.get(id);
-      const segmentName = op?.segment ? segmentMap.get(op.segment) : 'Sem Segmento';
-
-      reportData.set(id, {
-        "Operador": op?.name || `ID ${id}`,
-        "Email": op?.email || '',
-        "Segmento": segmentName,
-        "Mensagens Enviadas": 0,
-        "Mensagens Recebidas": 0,
-        "Total": 0
-      });
-    });
-
-    // Preencher contagens
     for (const stat of groupedStats) {
       if (!stat.userId) continue;
 
-      const entry = reportData.get(stat.userId);
-      if (entry) {
-        if (stat.sender === 'operator') {
-          entry["Mensagens Enviadas"] += stat._count.id;
-        } else if (stat.sender === 'contact') {
-          entry["Mensagens Recebidas"] += stat._count.id;
-        }
-        entry["Total"] += stat._count.id;
+      const userId = stat.userId;
+      const lineId = stat.userLine || 0; // 0 para 'Sem Linha'
+      const key = `${userId}-${lineId}`;
+
+      let entry = reportData.get(key);
+
+      if (!entry) {
+        const op = operatorMap.get(userId);
+        const line = lineMap.get(lineId);
+        const segmentName = op?.segment ? segmentMap.get(op.segment) : 'Sem Segmento';
+
+        entry = {
+          "Operador": op?.name || `ID ${userId}`,
+          "Email": op?.email || '',
+          "Segmento": segmentName,
+          "Linha Utilizada": line ? `${line.phone} (${line.evolutionName})` : (lineId === 0 ? 'N/A' : `Linha ID ${lineId}`),
+          "Mensagens Enviadas": 0,
+          "Mensagens Recebidas": 0,
+          "Total": 0
+        };
+        reportData.set(key, entry);
       }
+
+      if (stat.sender === 'operator') {
+        entry["Mensagens Enviadas"] += stat._count.id;
+      } else if (stat.sender === 'contact') {
+        entry["Mensagens Recebidas"] += stat._count.id;
+      }
+      entry["Total"] += stat._count.id;
     }
 
     // Ordenar por total decrescente
