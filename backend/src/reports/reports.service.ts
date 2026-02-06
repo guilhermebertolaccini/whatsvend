@@ -2613,5 +2613,92 @@ export class ReportsService {
       totalRows: formattedResults.length,
       data: formattedResults,
     };
+  /**
+   * Relatório: Mensagens por Operador
+   * Retorna contagem de mensagens enviadas e recebidas por operador
+   */
+  async getMessagesPerOperatorReport(filters: ReportFilterDto, userIdentifier ?: "cliente" | "proprietario") {
+      // 1. Construir cláusula WHERE base
+      const whereClause: any = {
+        datetime: {
+          gte: new Date(`${filters.startDate}T00:00:00`),
+          lte: new Date(`${filters.endDate}T23:59:59.999`),
+        },
+        userId: { not: null }, // Apenas mensagens vinculadas a operadores
+        isAdminTest: false,
+      };
+
+      // 2. Aplicar filtros adicionais
+      if (filters.segment) {
+        whereClause.segment = filters.segment;
+      }
+
+      this.applyIdentifierFilter(whereClause, userIdentifier, 'conversation');
+
+      // 3. Buscar agredado por Operador + Tipo de Envio (Sender)
+      // Prisma groupBy não suporta incluir relation (User), então faremos em duas etapas
+      const groupedStats = await this.prisma.conversation.groupBy({
+        by: ['userId', 'sender'],
+        where: whereClause,
+        _count: {
+          id: true,
+        },
+      });
+
+      // 4. Buscar detalhes dos operadores
+      const operatorIds = [...new Set(groupedStats.map(s => s.userId).filter(id => id !== null))] as number[];
+
+      const operators = await this.prisma.user.findMany({
+        where: { id: { in: operatorIds } },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          segment: true
+        },
+      });
+
+      const segments = await this.prisma.segment.findMany();
+      const segmentMap = new Map(segments.map(s => [s.id, s.name]));
+      const operatorMap = new Map(operators.map(u => [u.id, u]));
+
+      // 5. Consolidar dados
+      // Estrutura final: Map<userId, { name, segment, sent, received }>
+      const reportData = new Map<number, any>();
+
+      // Inicializar mapa com todos os operadores encontrados
+      operatorIds.forEach(id => {
+        const op = operatorMap.get(id);
+        const segmentName = op?.segment ? segmentMap.get(op.segment) : 'Sem Segmento';
+
+        reportData.set(id, {
+          "Operador": op?.name || `ID ${id}`,
+          "Email": op?.email || '',
+          "Segmento": segmentName,
+          "Mensagens Enviadas": 0,
+          "Mensagens Recebidas": 0,
+          "Total": 0
+        });
+      });
+
+      // Preencher contagens
+      for (const stat of groupedStats) {
+        if (!stat.userId) continue;
+
+        const entry = reportData.get(stat.userId);
+        if (entry) {
+          if (stat.sender === 'operator') {
+            entry["Mensagens Enviadas"] += stat._count.id;
+          } else if (stat.sender === 'contact') {
+            entry["Mensagens Recebidas"] += stat._count.id;
+          }
+          entry["Total"] += stat._count.id;
+        }
+      }
+
+      // Ordenar por total decrescente
+      const results = Array.from(reportData.values()).sort((a, b) => b["Total"] - a["Total"]);
+
+      return results;
+    }
   }
-}

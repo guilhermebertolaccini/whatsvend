@@ -38,6 +38,7 @@ const reportTypes: ReportType[] = [
   { value: "detalhado_conversas", label: "Detalhado Conversas" },
   { value: "linhas", label: "Linhas" },
   { value: "mensagens_por_linha", label: "Mensagens por Linha" },
+  { value: "mensagens_operador", label: "Mensagens por Operador" },
   { value: "resumo_atendimentos", label: "Resumo Atendimentos" },
   { value: "usuarios", label: "Usuários" },
   { value: "hiper_personalizado", label: "Hiper Personalizado" },
