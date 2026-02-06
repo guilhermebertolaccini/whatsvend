@@ -2637,19 +2637,25 @@ export class ReportsService {
 
     this.applyIdentifierFilter(whereClause, userIdentifier, 'conversation');
 
-    // 3. Buscar agredado por Operador + Linha + Tipo de Envio (Sender)
-    // Agrupamos também por 'userLine'
-    const groupedStats = await this.prisma.conversation.groupBy({
-      by: ['userId', 'userLine', 'sender'],
+    // 3. Buscar TODAS as mensagens (Conversations) no período
+    // Solicitado: Uma linha por mensagem
+    const conversations = await this.prisma.conversation.findMany({
       where: whereClause,
-      _count: {
+      select: {
         id: true,
+        userId: true,
+        userLine: true,
+        sender: true,
+        datetime: true,
+        messageType: true, // Opcional, mas útil para contexto se precisar
+        message: true,
       },
+      orderBy: { datetime: 'desc' }
     });
 
     // 4. Buscar detalhes dos operadores e das linhas
-    const operatorIds = [...new Set(groupedStats.map(s => s.userId).filter(id => id !== null))] as number[];
-    const lineIds = [...new Set(groupedStats.map(s => s.userLine).filter(id => id !== null))] as number[];
+    const operatorIds = [...new Set(conversations.map(s => s.userId).filter(id => id !== null))] as number[];
+    const lineIds = [...new Set(conversations.map(s => s.userLine).filter(id => id !== null))] as number[];
 
     const operators = await this.prisma.user.findMany({
       where: { id: { in: operatorIds } },
@@ -2666,7 +2672,7 @@ export class ReportsService {
       select: {
         id: true,
         phone: true,
-        evolutionName: true // Útil para identificar
+        evolutionName: true
       }
     });
 
@@ -2675,48 +2681,32 @@ export class ReportsService {
     const operatorMap = new Map(operators.map(u => [u.id, u]));
     const lineMap = new Map(lines.map(l => [l.id, l]));
 
-    // 5. Consolidar dados
-    // Estrutura final: Array de objetos flat para CSV
-    // Chave composta para Map auxiliar: `${userId}-${userLine}`
-    const reportData = new Map<string, any>();
+    // 5. Transformar em dados planos
+    // Colunas Solicitadas: Operador, Email, Segmento, Linha, Tipo(recebeu/enviou), Data
+    const formattedResults = conversations.map(conv => {
+      const op = operatorMap.get(conv.userId!);
+      const line = conv.userLine ? lineMap.get(conv.userLine) : null;
+      const segmentName = op?.segment ? segmentMap.get(op.segment) : 'Sem Segmento';
 
-    for (const stat of groupedStats) {
-      if (!stat.userId) continue;
+      // Formatar Data (DD/MM/YYYY)
+      const dateObj = new Date(conv.datetime);
+      const dateStr = dateObj.toLocaleDateString('pt-BR');
 
-      const userId = stat.userId;
-      const lineId = stat.userLine || 0; // 0 para 'Sem Linha'
-      const key = `${userId}-${lineId}`;
+      // Traduzir Tipo
+      const type = conv.sender === 'operator' ? 'Enviou' : 'Recebeu';
 
-      let entry = reportData.get(key);
+      return {
+        "Operador": op?.name || `ID ${conv.userId}`,
+        "Email": op?.email || '',
+        "Segmento": segmentName,
+        "Linha Utilizada": line ? `${line.phone} (${line.evolutionName})` : (conv.userLine ? `Linha ID ${conv.userLine}` : 'N/A'),
+        "Tipo": type,
+        "Data": dateStr,
+        "Hora": dateObj.toLocaleTimeString('pt-BR'),
+        "Conteúdo": conv.message || ''
+      };
+    });
 
-      if (!entry) {
-        const op = operatorMap.get(userId);
-        const line = lineMap.get(lineId);
-        const segmentName = op?.segment ? segmentMap.get(op.segment) : 'Sem Segmento';
-
-        entry = {
-          "Operador": op?.name || `ID ${userId}`,
-          "Email": op?.email || '',
-          "Segmento": segmentName,
-          "Linha Utilizada": line ? `${line.phone} (${line.evolutionName})` : (lineId === 0 ? 'N/A' : `Linha ID ${lineId}`),
-          "Mensagens Enviadas": 0,
-          "Mensagens Recebidas": 0,
-          "Total": 0
-        };
-        reportData.set(key, entry);
-      }
-
-      if (stat.sender === 'operator') {
-        entry["Mensagens Enviadas"] += stat._count.id;
-      } else if (stat.sender === 'contact') {
-        entry["Mensagens Recebidas"] += stat._count.id;
-      }
-      entry["Total"] += stat._count.id;
-    }
-
-    // Ordenar por total decrescente
-    const results = Array.from(reportData.values()).sort((a, b) => b["Total"] - a["Total"]);
-
-    return results;
+    return formattedResults;
   }
 }
