@@ -307,7 +307,7 @@ export class LinesService {
   async findAll(filters?: any) {
     try {
       // Remover campos inválidos que não existem no schema e extrair conhecidos
-      const { search, lineStatus, segment, date, ...validFilters } = filters || {};
+      const { search, lineStatus, segment, date, startDate, endDate, ...validFilters } = filters || {};
 
       // Construir where clause
       const where: any = { ...validFilters };
