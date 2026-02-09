@@ -506,6 +506,16 @@ export class WebhooksService {
               });
 
               console.log(`📚 [Webhook] Importação de histórico iniciada em background para linha ${line.phone}`);
+
+              // Buscar número real da linha (ownerJid) em background
+              this.linesService.fetchRealNumber(
+                line.id,
+                evolution.evolutionUrl,
+                evolution.evolutionKey,
+                instanceName
+              ).catch((error) => {
+                console.error(`❌ [Webhook] Erro ao buscar número real em background:`, error.message);
+              });
             }
             // Verificar quantos operadores já estão vinculados à linha
             const currentOperatorsCount = await this.prisma.lineOperator.count({
@@ -556,9 +566,17 @@ export class WebhooksService {
 
                 // Se encontrou operador, atualizar segmento da linha para o do operador
                 if (operatorWithoutLine && operatorWithoutLine.segment) {
+                  const updateData: any = { segment: operatorWithoutLine.segment };
+
+                  // Se for a primeira atribuição de segmento, registrar
+                  if (!line.firstSegmentId) {
+                    updateData.firstSegmentId = operatorWithoutLine.segment;
+                    updateData.firstTransferAt = new Date();
+                  }
+
                   await this.prisma.linesStock.update({
                     where: { id: line.id },
-                    data: { segment: operatorWithoutLine.segment },
+                    data: updateData,
                   });
                   console.log(`🔄 [Webhook] Linha padrão ${line.phone} atualizada para o segmento ${operatorWithoutLine.segment} do operador ${operatorWithoutLine.name}`);
                 }

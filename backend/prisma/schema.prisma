@@ -161,8 +161,11 @@ model BlockList {
 model LinesStock {
   id            Int        @id @default(autoincrement())
   phone         String     @unique
+  realNumber    String?    // Número real retornado pela Evolution (pós-conexão)
   lineStatus    LineStatus @default(connecting)
   segment       Int?
+  firstSegmentId Int?      // ID do primeiro segmento atribuído (para relatório)
+  firstTransferAt DateTime? // Data da primeira atribuição de segmento
   linkedTo      Int? // Mantido para compatibilidade (deprecated - usar LineOperators)
   evolutionName String
   oficial       Boolean    @default(false)

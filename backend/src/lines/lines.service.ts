@@ -337,30 +337,33 @@ export class LinesService {
       }
 
       // Aplicar filtro de data (criação)
-      // Aplicar filtro de data (criação)
-      if (date && typeof date === 'string') {
+      // Aplicar filtro de data ou range de datas (baseado em createdAt)
+      if (filters.startDate || filters.endDate) {
+        where.createdAt = {};
+
+        if (filters.startDate) {
+          // Início do dia
+          const start = new Date(filters.startDate);
+          // start.setHours(0, 0, 0, 0); // Já vem como YYYY-MM-DD, new Date() assume UTC ou local dependendo do formato, mas vamos garantir
+          // Se vier YYYY-MM-DD
+          where.createdAt.gte = new Date(`${filters.startDate}T00:00:00.000`);
+        }
+
+        if (filters.endDate) {
+          // Fim do dia
+          where.createdAt.lte = new Date(`${filters.endDate}T23:59:59.999`);
+        }
+      } else if (date && typeof date === 'string') {
+        // Fallback para filtro de data única (manter compatibilidade se necessário)
         const dateStr = date.trim();
-        // Garantir que a data seja interpretada corretamente (YYYY-MM-DD -> Start/End of Day)
-        // Adicionamos T00:00:00 para forçar local time ou tratamos como UTC
-        // Vamos assumir que o input date envia YYYY-MM-DD (ex: 2026-02-04)
+        const start = new Date(`${dateStr}T00:00:00.000`);
+        const end = new Date(`${dateStr}T23:59:59.999`);
 
-        // Criar data baseada na string. 
-        // new Date("2026-02-04") cria em UTC. 
-        // new Date("2026-02-04T00:00:00") cria em Local Time do servidor.
-        const startDate = new Date(dateStr);
-        const endDate = new Date(dateStr);
-
-        // Ajustar para dia seguinte
-        endDate.setDate(endDate.getDate() + 1);
-
-        // Validar se data é válida
-        if (!isNaN(startDate.getTime())) {
+        if (!isNaN(start.getTime())) {
           where.createdAt = {
-            gte: startDate,
-            lt: endDate,
+            gte: start,
+            lte: end,
           };
-        } else {
-          console.warn(`⚠️ [LinesService.findAll] Data inválida recebida: ${date}`);
         }
       }
 
@@ -572,6 +575,12 @@ export class LinesService {
     // Se receiveMedia foi alterado, reconfigurar webhook
     if (updateLineDto.receiveMedia !== undefined && updateLineDto.receiveMedia !== currentLine.receiveMedia) {
       await this.updateWebhookConfig(currentLine, updateLineDto.receiveMedia);
+    }
+
+    // Se o segmento está sendo atualizado e a linha ainda não tem firstSegmentId, registrar
+    if (updateLineDto.segment && !currentLine.firstSegmentId) {
+      (updateLineDto as any).firstSegmentId = updateLineDto.segment;
+      (updateLineDto as any).firstTransferAt = new Date();
     }
 
     return this.prisma.linesStock.update({
@@ -1729,9 +1738,17 @@ export class LinesService {
 
         if (isLineDefault) {
           // A linha era padrão/livre, agora pertence ao segmento do operador para sempre
+          const updateData: any = { segment: operator.segment };
+
+          // Se for a primeira atribuição de segmento, registrar
+          if (!line.firstSegmentId) {
+            updateData.firstSegmentId = operator.segment;
+            updateData.firstTransferAt = new Date();
+          }
+
           await tx.linesStock.update({
             where: { id: lineId },
-            data: { segment: operator.segment },
+            data: updateData,
           });
           console.log(`🔒 [assignOperatorToLine] Linha ${line.phone} TRAVADA no segmento ${operator.segment} (era ${line.segment})`);
         } else if (line.segment !== operator.segment) {
@@ -2125,6 +2142,41 @@ export class LinesService {
     } catch (error) {
       console.error('❌ [LinesService] Erro ao tentar vincular linha automaticamente:', error);
       // Não lançar erro, apenas logar - a linha foi criada com sucesso
+    }
+  }
+  async fetchRealNumber(lineId: number, evolutionUrl: string, evolutionKey: string, instanceName: string) {
+    try {
+      console.log(`🔍 [LinesService] Buscando número real da linha ${lineId} (${instanceName})...`);
+      const response = await axios.get(`${evolutionUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
+        headers: { apikey: evolutionKey }
+      });
+
+      // Evolution retorna array de instâncias ou objeto com instância
+      const data = response.data;
+      let instance = null;
+
+      if (Array.isArray(data)) {
+        instance = data.find((i: any) => i.instanceName === instanceName || i.instance?.instanceName === instanceName);
+        // As vezes o array contém objetos wrapped em { instance: ... }
+        if (!instance && data.length > 0) instance = data[0]; // Fallback
+      } else {
+        instance = data.instance || data;
+      }
+
+      const ownerJid = instance?.ownerJid || instance?.instance?.ownerJid;
+
+      if (ownerJid) {
+        const realNumber = ownerJid.split('@')[0];
+        await this.prisma.linesStock.update({
+          where: { id: lineId },
+          data: { realNumber }
+        });
+        console.log(`✅ [LinesService] Número real da linha ${lineId} atualizado: ${realNumber}`);
+      } else {
+        console.warn(`⚠️ [LinesService] ownerJid não encontrado na resposta da Evolution para ${instanceName}`, data);
+      }
+    } catch (error) {
+      console.error(`❌ [LinesService] Erro ao buscar número real da linha ${lineId}:`, error.message);
     }
   }
 }

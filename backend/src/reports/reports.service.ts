@@ -884,12 +884,16 @@ export class ReportsService {
 
     const result = lines.map((line) => {
       const segment = line.segment ? segmentMap.get(line.segment) : null;
+      const firstSegment = line.firstSegmentId ? segmentMap.get(line.firstSegmentId) : null;
+
+      const transferDate = line.firstTransferAt || line.updatedAt;
 
       return {
-        "Nome da Linha": line.phone,
+        "Nome da Linha": line.realNumber || line.phone,
         "Data Criação": this.formatDateTime(line.createdAt),
         Status: line.lineStatus === "active" ? "Ativo" : "Banido",
-        Segmento: segment?.name || "Sem segmento",
+        Segmento: firstSegment?.name || segment?.name || "Sem segmento",
+        "Data de Transferência": this.formatDateTime(transferDate),
         "Data Update": this.formatDateTime(line.updatedAt),
       };
     });
