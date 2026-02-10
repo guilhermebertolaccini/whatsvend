@@ -8,6 +8,7 @@ import {
   FileText,
   Download,
   Search,
+  ArrowRightLeft,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -21,6 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -56,6 +66,11 @@ export default function Supervisionar() {
   const [selectedSegment, setSelectedSegment] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [operatorSearch, setOperatorSearch] = useState("");
+  type FilterType = "todas" | "stand-by" | "atendimento" | "finalizadas";
+  const [conversationFilter, setConversationFilter] = useState<FilterType>("atendimento");
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [transferTargetUserId, setTransferTargetUserId] = useState<string>("");
+  const [isTransferring, setIsTransferring] = useState(false);
 
   const { user } = useAuth();
 
@@ -212,7 +227,8 @@ export default function Supervisionar() {
     return () => clearInterval(interval);
   }, [loadConversations]);
 
-  const filteredConversations =
+  // Filtrar por operador
+  const operatorFiltered =
     selectedOperator === "all"
       ? conversations
       : conversations.filter((c) => {
@@ -221,6 +237,24 @@ export default function Supervisionar() {
         );
         return operator && c.operatorName === operator.name;
       });
+
+  // Filtrar por status da conversa
+  const filteredConversations = operatorFiltered.filter((conv) => {
+    if (conversationFilter === "todas") return true;
+
+    const lastMsg = conv.messages[conv.messages.length - 1];
+    const lastMsgTime = new Date(lastMsg?.datetime || conv.lastMessageTime).getTime();
+    const sixHours = 6 * 60 * 60 * 1000;
+    const now = Date.now();
+    const isStale = now - lastMsgTime > sixHours;
+    const isTabulated = lastMsg?.tabulation != null;
+
+    if (conversationFilter === "finalizadas") return isTabulated;
+    if (conversationFilter === "stand-by") return !isTabulated && isStale && lastMsg?.sender === "operator";
+    if (conversationFilter === "atendimento") return !isTabulated && !isStale;
+
+    return true;
+  });
 
   const filteredOperators = operators.filter((op) =>
     op.name.toLowerCase().includes(operatorSearch.toLowerCase())
@@ -295,6 +329,41 @@ export default function Supervisionar() {
                 ))}
               </SelectContent>
             </Select>
+            {/* Botões de Filtro */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <Button
+                variant={conversationFilter === "atendimento" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setConversationFilter("atendimento")}
+                className="text-xs px-2 h-7"
+              >
+                Atendimento
+              </Button>
+              <Button
+                variant={conversationFilter === "stand-by" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setConversationFilter("stand-by")}
+                className="text-xs px-2 h-7"
+              >
+                Stand By
+              </Button>
+              <Button
+                variant={conversationFilter === "finalizadas" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setConversationFilter("finalizadas")}
+                className="text-xs px-2 h-7"
+              >
+                Finalizadas
+              </Button>
+              <Button
+                variant={conversationFilter === "todas" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setConversationFilter("todas")}
+                className="text-xs px-2 h-7"
+              >
+                Todas
+              </Button>
+            </div>
           </div>
 
           {/* Conversations */}
@@ -441,6 +510,19 @@ export default function Supervisionar() {
                       Baixar PDF
                     </Button>
                   )}
+                  {(user?.role === "admin" || user?.role === "supervisor" || user?.role === "digital") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTransferTargetUserId("");
+                        setIsTransferOpen(true);
+                      }}
+                    >
+                      <ArrowRightLeft className="h-4 w-4 mr-2" />
+                      Transferir
+                    </Button>
+                  )}
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground">Atendente</p>
                     <p className="text-sm font-medium text-warning">
@@ -449,6 +531,85 @@ export default function Supervisionar() {
                   </div>
                 </div>
               </div>
+
+              {/* Transfer Dialog */}
+              <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Transferir Atendimento</DialogTitle>
+                    <DialogDescription>
+                      Transferir a conversa de {selectedConversation.contactName} para outro operador.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Operador atual</Label>
+                      <p className="text-sm font-medium text-warning">{selectedConversation.operatorName}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="transfer-operator">Transferir para</Label>
+                      <Select value={transferTargetUserId} onValueChange={setTransferTargetUserId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um operador" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {operators
+                            .filter((op) => op.name !== selectedConversation.operatorName)
+                            .map((op) => (
+                              <SelectItem key={op.id} value={op.id.toString()}>
+                                {op.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsTransferOpen(false)} disabled={isTransferring}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        if (!transferTargetUserId || !selectedConversation) return;
+                        setIsTransferring(true);
+                        try {
+                          const result = await conversationsService.transfer(
+                            selectedConversation.contactPhone,
+                            Number(transferTargetUserId)
+                          );
+                          toast({
+                            title: "Conversa transferida",
+                            description: `${result.transferred} mensagem(ns) transferida(s) para ${result.targetOperator}`,
+                          });
+                          setIsTransferOpen(false);
+                          await loadConversations();
+                        } catch (error) {
+                          toast({
+                            title: "Erro ao transferir",
+                            description: error instanceof Error ? error.message : "Erro desconhecido",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setIsTransferring(false);
+                        }
+                      }}
+                      disabled={!transferTargetUserId || isTransferring}
+                    >
+                      {isTransferring ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Transferindo...
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRightLeft className="mr-2 h-4 w-4" />
+                          Confirmar Transferência
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {/* Messages */}
               <ScrollArea className="flex-1 p-4">

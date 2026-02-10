@@ -220,6 +220,24 @@ export class ConversationsController {
     return this.conversationsService.recallContact(phone, user.id, userLine);
   }
 
+  @Post("transfer/:phone")
+  @Roles(Role.admin, Role.supervisor, Role.digital)
+  @ApiOperation({ summary: "Transferir conversa para outro operador" })
+  async transferConversation(
+    @Param("phone") phone: string,
+    @Body() body: { targetUserId: number },
+    @CurrentUser() user: any
+  ) {
+    console.log(
+      `🔄 [POST /conversations/transfer/:phone] ${user.name} (${user.role}) transferindo conversa ${phone} para userId ${body.targetUserId}`
+    );
+    return this.conversationsService.transferConversation(
+      phone,
+      body.targetUserId,
+      user
+    );
+  }
+
   @Delete(":id")
   @Roles(Role.admin, Role.supervisor)
   remove(@Param("id") id: string) {

@@ -637,6 +637,13 @@ export const conversationsService = {
   delete: async (id: number): Promise<void> => {
     await apiRequest(`/conversations/${id}`, { method: 'DELETE' });
   },
+
+  transfer: async (phone: string, targetUserId: number): Promise<{ transferred: number; targetOperator: string; targetUserId: number }> => {
+    return apiRequest(`/conversations/transfer/${encodeURIComponent(phone)}`, {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId }),
+    });
+  },
 };
 
 // ==================== TABULATIONS ====================

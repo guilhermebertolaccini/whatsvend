@@ -2073,12 +2073,13 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
       }
     }
 
-    // No modo compartilhado, SEMPRE enviar para todos os usuários da linha (não apenas se userId não estiver conectado)
-    // Fora do modo compartilhado, enviar apenas se userId não estiver conectado
-    const shouldEmitToAllLineUsers = sharedLineMode || !conversation.userId || !this.connectedUsers.has(conversation.userId);
+    // No modo compartilhado, SEMPRE enviar para todos os usuários da linha
+    // Fora do modo compartilhado, enviar para outros operadores da linha APENAS se NÃO houver userId atribuído
+    // ISOLAMENTO: Se userId está definido, a conversa pertence a esse operador e NÃO deve ir para outros
+    const shouldEmitToAllLineUsers = sharedLineMode || !conversation.userId;
 
     if (shouldEmitToAllLineUsers && conversation.userLine) {
-      console.log(`  → ${sharedLineMode ? 'Modo compartilhado: ' : 'Fallback: '}Enviando para todos os usuários online da linha ${conversation.userLine}`);
+      console.log(`  → ${sharedLineMode ? 'Modo compartilhado: ' : 'Sem operador atribuído: '}Enviando para todos os usuários online da linha ${conversation.userLine}`);
       const lineOperators = await (this.prisma as any).lineOperator.findMany({
         where: { lineId: conversation.userLine },
         include: { user: true },
@@ -2124,7 +2125,10 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
           connected: this.connectedUsers.has(lo.userId),
         })));
       }
-    } else if (!conversation.userLine) {
+    } else if (!sharedLineMode && conversation.userId && !this.connectedUsers.has(conversation.userId)) {
+      // ISOLAMENTO: Operador atribuído está offline. NÃO enviar para outros operadores da linha.
+      console.warn(`  ⚠️ [ISOLAMENTO] Operador ${conversation.userId} está offline. Mensagem NÃO será enviada para outros operadores da linha (modo não-compartilhado).`);
+    } else if (!conversation.userLine && !conversation.userId) {
       console.warn(`  ⚠️ Conversa sem userId e sem userLine - não é possível enviar`);
     }
 
@@ -2147,16 +2151,26 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   /**
    * Emite evento para TODOS os operadores da mesma linha (modo compartilhado)
    * Usado para sincronizar mensagens enviadas entre operadores que compartilham a mesma linha
+   * ISOLAMENTO: Só emite para outros operadores se o modo compartilhado estiver ativo
    */
   private async emitToLineOperators(lineId: number, event: string, data: any, excludeUserId?: number) {
     try {
+      // ISOLAMENTO: Verificar se modo compartilhado está ativo
+      const controlPanel = await this.controlPanelService.findOne();
+      const sharedLineMode = controlPanel?.sharedLineMode ?? false;
+
+      if (!sharedLineMode) {
+        console.log(`🔒 [WebSocket] Modo não-compartilhado: mensagem enviada NÃO será replicada para outros operadores da linha ${lineId}`);
+        return; // Não emitir para outros operadores
+      }
+
       // Buscar todos os operadores vinculados à linha
       const lineOperators = await (this.prisma as any).lineOperator.findMany({
         where: { lineId },
         include: { user: true },
       });
 
-      console.log(`📢 [WebSocket] Emitindo '${event}' para ${lineOperators.length} operador(es) da linha ${lineId}`);
+      console.log(`📢 [WebSocket] Emitindo '${event}' para ${lineOperators.length} operador(es) da linha ${lineId} (modo compartilhado)`);
 
       // Emitir para cada operador online (exceto quem enviou, se especificado)
       for (const lo of lineOperators) {

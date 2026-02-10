@@ -125,7 +125,7 @@ export default function Atendimento() {
   // Estado para filtro de conversas
   type FilterType = "todas" | "stand-by" | "atendimento" | "finalizadas";
   const [conversationFilter, setConversationFilter] =
-    useState<FilterType>("todas");
+    useState<FilterType>("atendimento");
 
   // Estado para pesquisa de tabulação
   const [tabulationSearch, setTabulationSearch] = useState("");
@@ -1519,13 +1519,6 @@ export default function Atendimento() {
             {/* Botões de Filtro */}
             <div className="flex items-center gap-2 flex-wrap">
               <Button
-                variant={conversationFilter === "todas" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setConversationFilter("todas")}
-              >
-                Todas
-              </Button>
-              <Button
                 variant={
                   conversationFilter === "atendimento" ? "default" : "outline"
                 }
@@ -1551,6 +1544,13 @@ export default function Atendimento() {
                 onClick={() => setConversationFilter("finalizadas")}
               >
                 Finalizadas
+              </Button>
+              <Button
+                variant={conversationFilter === "todas" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setConversationFilter("todas")}
+              >
+                Todas
               </Button>
             </div>
           </div>

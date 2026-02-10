@@ -254,4 +254,68 @@ export class ConversationsService {
 
     return newConversation;
   }
+
+  /**
+   * Transferir conversa de um operador para outro
+   * Atualiza userId e userName de todas as mensagens não tabuladas do contato
+   */
+  async transferConversation(contactPhone: string, targetUserId: number, currentUser: any) {
+    // Buscar operador alvo
+    const targetOperator = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+
+    if (!targetOperator) {
+      throw new NotFoundException('Operador alvo não encontrado');
+    }
+
+    // Buscar conversa ativa para obter o segmento
+    const activeConversation = await this.prisma.conversation.findFirst({
+      where: {
+        contactPhone,
+        tabulation: null,
+      },
+      orderBy: { datetime: 'desc' },
+    });
+
+    if (!activeConversation) {
+      throw new NotFoundException('Nenhuma conversa ativa encontrada para este contato');
+    }
+
+    // Verificar que o operador alvo é do mesmo segmento da conversa
+    if (activeConversation.segment && targetOperator.segment !== activeConversation.segment) {
+      throw new NotFoundException(
+        `Operador ${targetOperator.name} não pertence ao segmento da conversa`
+      );
+    }
+
+    // Buscar a linha do operador alvo
+    const targetLineOp = await this.prisma.lineOperator.findFirst({
+      where: { userId: targetUserId },
+      include: { line: true },
+    });
+
+    // Atualizar todas as mensagens não tabuladas deste contato
+    const updated = await this.prisma.conversation.updateMany({
+      where: {
+        contactPhone,
+        tabulation: null,
+      },
+      data: {
+        userId: targetUserId,
+        userName: targetOperator.name,
+        userLine: targetLineOp?.lineId || null,
+      },
+    });
+
+    console.log(
+      `🔄 [ConversationsService.transferConversation] Transferido ${updated.count} mensagens de ${contactPhone} para ${targetOperator.name} (userId: ${targetUserId})`
+    );
+
+    return {
+      transferred: updated.count,
+      targetOperator: targetOperator.name,
+      targetUserId: targetUserId,
+    };
+  }
 }
