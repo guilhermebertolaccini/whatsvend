@@ -69,7 +69,13 @@ import {
   useRealtimeSubscription,
 } from "@/hooks/useRealtimeConnection";
 import { WS_EVENTS, realtimeSocket } from "@/services/websocket";
-import { format } from "date-fns";
+import {
+  format,
+  isToday,
+  isYesterday,
+  differenceInCalendarDays,
+} from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Tooltip,
   TooltipContent,
@@ -1251,6 +1257,63 @@ export default function Atendimento() {
     }
   };
 
+  /** Horário/data na listagem lateral: hoje → HH:mm, ontem → "Ontem", semana → dia da semana, mais antigo → dd/MM/yy. */
+  const formatChatListTime = (datetime: string) => {
+    try {
+      const d = new Date(datetime);
+      const today = new Date();
+      if (isToday(d)) return format(d, "HH:mm");
+      if (isYesterday(d)) return "Ontem";
+      const daysDiff = differenceInCalendarDays(today, d);
+      if (daysDiff <= 7) {
+        const weekday = format(d, "EEEE", { locale: ptBR }).replace(/-feira$/, "");
+        return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+      }
+      return format(d, "dd/MM/yy");
+    } catch {
+      return "";
+    }
+  };
+
+  /** Rótulo do dia para o balão separador: Hoje, Ontem, dia da semana, ou "Quarta, 4 de Fev". */
+  const formatDateLabel = (datetime: string) => {
+    try {
+      const d = new Date(datetime);
+      const today = new Date();
+      if (isToday(d)) return "Hoje";
+      if (isYesterday(d)) return "Ontem";
+      const daysDiff = differenceInCalendarDays(today, d);
+      if (daysDiff <= 7) {
+        const weekday = format(d, "EEEE", { locale: ptBR }).replace(/-feira$/, "");
+        return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+      }
+      const parts = format(d, "EEEE, d 'de' MMM", { locale: ptBR })
+        .replace(/-feira/g, "")
+        .split(" de ");
+      return parts
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1).replace(/\.$/, ""))
+        .join(" de ");
+    } catch {
+      return "";
+    }
+  };
+
+  /** Retorna itens da lista de chat intercalando balões de data e mensagens. */
+  const getChatListItems = (messages: APIConversation[]) => {
+    const items: ({ type: "date"; label: string } | { type: "message"; msg: APIConversation })[] = [];
+    let lastDateKey = "";
+    for (const msg of messages) {
+      const d = new Date(msg.datetime);
+      const dateKey = format(d, "yyyy-MM-dd");
+      if (dateKey !== lastDateKey) {
+        lastDateKey = dateKey;
+        items.push({ type: "date", label: formatDateLabel(msg.datetime) });
+      }
+      items.push({ type: "message", msg });
+    }
+    return items;
+  };
+
   return (
     <MainLayout>
       <div className="h-[calc(100vh-6rem)] flex gap-4">
@@ -1595,7 +1658,7 @@ export default function Atendimento() {
                             {conv.contactName}
                           </p>
                           <span className="text-xs text-muted-foreground">
-                            {formatTime(conv.lastMessageTime)}
+                            {formatChatListTime(conv.lastMessageTime)}
                           </span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
@@ -1866,133 +1929,153 @@ export default function Atendimento() {
               {/* Messages */}
               <ScrollArea ref={messagesScrollRef} className="flex-1 p-4">
                 <div className="space-y-4">
-                  {selectedConversation.messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={cn(
-                        "flex gap-2",
-                        msg.sender === "contact"
-                          ? "justify-start"
-                          : "justify-end"
-                      )}
-                    >
-                      {msg.sender === "contact" && (
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-medium">
-                            {selectedConversation.contactName
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .slice(0, 2)}
+                  {getChatListItems(selectedConversation.messages).map(
+                    (item, index) =>
+                      item.type === "date" ? (
+                        <div
+                          key={`date-${index}-${item.label}`}
+                          className="flex justify-center py-1"
+                        >
+                          <span className="rounded-full bg-muted/80 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm">
+                            {item.label}
                           </span>
                         </div>
-                      )}
-                      <div
-                        className={cn(
-                          "max-w-[70%] rounded-2xl px-4 py-2",
-                          msg.sender === "contact"
-                            ? "bg-card border border-border"
-                            : "bg-primary text-primary-foreground"
-                        )}
-                      >
-                        {/* Renderizar mídia baseado no messageType */}
-                        {msg.messageType === "image" && msg.mediaUrl ? (
-                          <div className="mb-2">
-                            <img
-                              src={
-                                msg.mediaUrl.startsWith("http")
-                                  ? msg.mediaUrl
-                                  : `${API_BASE_URL}${msg.mediaUrl}`
-                              }
-                              alt="Imagem"
-                              className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                              style={{ maxHeight: "300px" }}
-                              onClick={() =>
-                                window.open(
-                                  msg.mediaUrl!.startsWith("http")
-                                    ? msg.mediaUrl!
-                                    : `${API_BASE_URL}${msg.mediaUrl}`,
-                                  "_blank"
-                                )
-                              }
-                            />
-                            {msg.message &&
-                              !msg.message.includes("recebida") && (
-                                <p className="text-sm mt-2">{msg.message}</p>
-                              )}
-                          </div>
-                        ) : msg.messageType === "audio" && msg.mediaUrl ? (
-                          <div className="mb-2">
-                            <audio
-                              controls
-                              className="max-w-full"
-                              src={
-                                msg.mediaUrl.startsWith("http")
-                                  ? msg.mediaUrl
-                                  : `${API_BASE_URL}${msg.mediaUrl}`
-                              }
-                            >
-                              Seu navegador não suporta áudio.
-                            </audio>
-                          </div>
-                        ) : msg.messageType === "video" && msg.mediaUrl ? (
-                          <div className="mb-2">
-                            <video
-                              controls
-                              className="max-w-full rounded-lg"
-                              style={{ maxHeight: "300px" }}
-                              src={
-                                msg.mediaUrl.startsWith("http")
-                                  ? msg.mediaUrl
-                                  : `${API_BASE_URL}${msg.mediaUrl}`
-                              }
-                            >
-                              Seu navegador não suporta vídeo.
-                            </video>
-                            {msg.message &&
-                              !msg.message.includes("recebido") && (
-                                <p className="text-sm mt-2">{msg.message}</p>
-                              )}
-                          </div>
-                        ) : msg.messageType === "document" && msg.mediaUrl ? (
-                          <div className="mb-2">
-                            <a
-                              href={
-                                msg.mediaUrl.startsWith("http")
-                                  ? msg.mediaUrl
-                                  : `${API_BASE_URL}${msg.mediaUrl}`
-                              }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-sm underline hover:no-underline"
-                            >
-                              <FileText className="h-4 w-4" />
-                              {msg.message || "Documento"}
-                            </a>
-                          </div>
-                        ) : (
-                          <p className="text-sm">{msg.message}</p>
-                        )}
-                        <p
+                      ) : (
+                        <div
+                          key={item.msg.id}
                           className={cn(
-                            "text-xs mt-1",
-                            msg.sender === "contact"
-                              ? "text-muted-foreground"
-                              : "text-primary-foreground/70"
+                            "flex gap-2",
+                            item.msg.sender === "contact"
+                              ? "justify-start"
+                              : "justify-end"
                           )}
                         >
-                          {formatTime(msg.datetime)}
-                        </p>
-                      </div>
-                      {msg.sender === "operator" && (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-cyan flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-medium text-primary-foreground">
-                            OP
-                          </span>
+                          {item.msg.sender === "contact" && (
+                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-medium">
+                                {selectedConversation.contactName
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .slice(0, 2)}
+                              </span>
+                            </div>
+                          )}
+                          <div
+                            className={cn(
+                              "max-w-[70%] rounded-2xl px-4 py-2",
+                              item.msg.sender === "contact"
+                                ? "bg-card border border-border"
+                                : "bg-primary text-primary-foreground"
+                            )}
+                          >
+                            {/* Renderizar mídia baseado no messageType */}
+                            {item.msg.messageType === "image" &&
+                            item.msg.mediaUrl ? (
+                              <div className="mb-2">
+                                <img
+                                  src={
+                                    item.msg.mediaUrl.startsWith("http")
+                                      ? item.msg.mediaUrl
+                                      : `${API_BASE_URL}${item.msg.mediaUrl}`
+                                  }
+                                  alt="Imagem"
+                                  className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                  style={{ maxHeight: "300px" }}
+                                  onClick={() =>
+                                    window.open(
+                                      item.msg.mediaUrl!.startsWith("http")
+                                        ? item.msg.mediaUrl!
+                                        : `${API_BASE_URL}${item.msg.mediaUrl}`,
+                                      "_blank"
+                                    )
+                                  }
+                                />
+                                {item.msg.message &&
+                                  !item.msg.message.includes("recebida") && (
+                                    <p className="text-sm mt-2">
+                                      {item.msg.message}
+                                    </p>
+                                  )}
+                              </div>
+                            ) : item.msg.messageType === "audio" &&
+                              item.msg.mediaUrl ? (
+                              <div className="mb-2">
+                                <audio
+                                  controls
+                                  className="max-w-full"
+                                  src={
+                                    item.msg.mediaUrl.startsWith("http")
+                                      ? item.msg.mediaUrl
+                                      : `${API_BASE_URL}${item.msg.mediaUrl}`
+                                  }
+                                >
+                                  Seu navegador não suporta áudio.
+                                </audio>
+                              </div>
+                            ) : item.msg.messageType === "video" &&
+                              item.msg.mediaUrl ? (
+                              <div className="mb-2">
+                                <video
+                                  controls
+                                  className="max-w-full rounded-lg"
+                                  style={{ maxHeight: "300px" }}
+                                  src={
+                                    item.msg.mediaUrl.startsWith("http")
+                                      ? item.msg.mediaUrl
+                                      : `${API_BASE_URL}${item.msg.mediaUrl}`
+                                  }
+                                >
+                                  Seu navegador não suporta vídeo.
+                                </video>
+                                {item.msg.message &&
+                                  !item.msg.message.includes("recebido") && (
+                                    <p className="text-sm mt-2">
+                                      {item.msg.message}
+                                    </p>
+                                  )}
+                              </div>
+                            ) : item.msg.messageType === "document" &&
+                              item.msg.mediaUrl ? (
+                              <div className="mb-2">
+                                <a
+                                  href={
+                                    item.msg.mediaUrl.startsWith("http")
+                                      ? item.msg.mediaUrl
+                                      : `${API_BASE_URL}${item.msg.mediaUrl}`
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-sm underline hover:no-underline"
+                                >
+                                  <FileText className="h-4 w-4" />
+                                  {item.msg.message || "Documento"}
+                                </a>
+                              </div>
+                            ) : (
+                              <p className="text-sm">{item.msg.message}</p>
+                            )}
+                            <p
+                              className={cn(
+                                "text-xs mt-1",
+                                item.msg.sender === "contact"
+                                  ? "text-muted-foreground"
+                                  : "text-primary-foreground/70"
+                              )}
+                            >
+                              {formatTime(item.msg.datetime)}
+                            </p>
+                          </div>
+                          {item.msg.sender === "operator" && (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-cyan flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-medium text-primary-foreground">
+                                OP
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      )
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
