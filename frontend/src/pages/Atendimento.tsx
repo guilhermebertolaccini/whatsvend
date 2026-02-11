@@ -1257,6 +1257,24 @@ export default function Atendimento() {
     }
   };
 
+  /** Horário/data na listagem lateral: hoje → HH:mm, ontem → "Ontem", semana → dia da semana, mais antigo → dd/MM/yy. */
+  const formatChatListTime = (datetime: string) => {
+    try {
+      const d = new Date(datetime);
+      const today = new Date();
+      if (isToday(d)) return format(d, "HH:mm");
+      if (isYesterday(d)) return "Ontem";
+      const daysDiff = differenceInCalendarDays(today, d);
+      if (daysDiff <= 7) {
+        const weekday = format(d, "EEEE", { locale: ptBR }).replace(/-feira$/, "");
+        return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+      }
+      return format(d, "dd/MM/yy");
+    } catch {
+      return "";
+    }
+  };
+
   /** Rótulo do dia para o balão separador: Hoje, Ontem, dia da semana, ou "Quarta, 4 de Fev". */
   const formatDateLabel = (datetime: string) => {
     try {
@@ -1640,7 +1658,7 @@ export default function Atendimento() {
                             {conv.contactName}
                           </p>
                           <span className="text-xs text-muted-foreground">
-                            {formatTime(conv.lastMessageTime)}
+                            {formatChatListTime(conv.lastMessageTime)}
                           </span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
