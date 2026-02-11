@@ -4,10 +4,10 @@ import { ReportFilterDto } from "./dto/report-filter.dto";
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   // Timezone padrão para formatação de datas (São Paulo, Brasil)
-  private readonly TIMEZONE = 'America/Sao_Paulo';
+  private readonly TIMEZONE = "America/Sao_Paulo";
 
   /**
    * Helper: Formatar data como YYYY-MM-DD (formato ISO) no timezone de São Paulo
@@ -16,14 +16,14 @@ export class ReportsService {
     const d = new Date(date);
     const options: Intl.DateTimeFormatOptions = {
       timeZone: this.TIMEZONE,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     };
-    const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(d);
-    const year = parts.find(p => p.type === 'year')?.value;
-    const month = parts.find(p => p.type === 'month')?.value;
-    const day = parts.find(p => p.type === 'day')?.value;
+    const parts = new Intl.DateTimeFormat("en-CA", options).formatToParts(d);
+    const year = parts.find((p) => p.type === "year")?.value;
+    const month = parts.find((p) => p.type === "month")?.value;
+    const day = parts.find((p) => p.type === "day")?.value;
     return `${year}-${month}-${day}`;
   }
 
@@ -32,11 +32,11 @@ export class ReportsService {
    */
   private formatDateBrazilian(date: Date): string {
     const d = new Date(date);
-    return d.toLocaleDateString('pt-BR', {
+    return d.toLocaleDateString("pt-BR", {
       timeZone: this.TIMEZONE,
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
     });
   }
 
@@ -45,16 +45,18 @@ export class ReportsService {
    */
   private formatDateTime(date: Date): string {
     const d = new Date(date);
-    return d.toLocaleString('pt-BR', {
-      timeZone: this.TIMEZONE,
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).replace(',', '');
+    return d
+      .toLocaleString("pt-BR", {
+        timeZone: this.TIMEZONE,
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      })
+      .replace(",", "");
   }
 
   /**
@@ -62,11 +64,11 @@ export class ReportsService {
    */
   private formatTime(date: Date): string {
     const d = new Date(date);
-    return d.toLocaleTimeString('pt-BR', {
+    return d.toLocaleTimeString("pt-BR", {
       timeZone: this.TIMEZONE,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
       hour12: false,
     });
   }
@@ -97,7 +99,7 @@ export class ReportsService {
     whereClause: any,
     userIdentifier: "cliente" | "proprietario" | undefined,
     filterType: "conversation" | "campaign" | "user" | "segment" | "line",
-    excludeVendUsers: boolean = true
+    excludeVendUsers: boolean = true,
   ): Promise<any> {
     // SEMPRE filtrar ações de teste administrador (não aparecem nos relatórios)
     if (filterType === "conversation" || filterType === "campaign") {
@@ -120,7 +122,7 @@ export class ReportsService {
                   orCondition.userId.in
                 ) {
                   orCondition.userId.in = orCondition.userId.in.filter(
-                    (id: number) => !vendUserIds.includes(id)
+                    (id: number) => !vendUserIds.includes(id),
                   );
                   if (orCondition.userId.in.length === 0) {
                     return { id: -1 }; // Filtro impossível para esta condição
@@ -145,7 +147,7 @@ export class ReportsService {
             });
             // Remover condições impossíveis
             whereClause.OR = whereClause.OR.filter(
-              (orCondition: any) => !(orCondition.id === -1)
+              (orCondition: any) => !(orCondition.id === -1),
             );
             // Se todas as condições OR foram removidas, retornar filtro impossível
             if (whereClause.OR.length === 0) {
@@ -159,7 +161,7 @@ export class ReportsService {
             ) {
               // Se já é um array, filtrar removendo vend users
               whereClause.userId.in = whereClause.userId.in.filter(
-                (id: number) => !vendUserIds.includes(id)
+                (id: number) => !vendUserIds.includes(id),
               );
               // Se após filtrar não sobrou nenhum, retornar filtro impossível
               if (whereClause.userId.in.length === 0) {
@@ -400,11 +402,11 @@ export class ReportsService {
    */
   async getOpSinteticoReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     console.log(
       "📊 [Reports] OP Sintético - Filtros:",
-      JSON.stringify(filters)
+      JSON.stringify(filters),
     );
 
     const whereClause: any = {};
@@ -417,7 +419,7 @@ export class ReportsService {
       whereClause.datetime = {};
       if (filters.startDate) {
         whereClause.datetime.gte = new Date(
-          `${filters.startDate}T00:00:00.000Z`
+          `${filters.startDate}T00:00:00.000Z`,
         );
       }
       if (filters.endDate) {
@@ -429,12 +431,12 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     console.log(
       "📊 [Reports] OP Sintético - Where:",
-      JSON.stringify(finalWhereClause)
+      JSON.stringify(finalWhereClause),
     );
 
     const conversations = await this.prisma.conversation.findMany({
@@ -443,7 +445,7 @@ export class ReportsService {
     });
 
     console.log(
-      `📊 [Reports] OP Sintético - ${conversations.length} conversas encontradas`
+      `📊 [Reports] OP Sintético - ${conversations.length} conversas encontradas`,
     );
 
     const segments = await this.prisma.segment.findMany();
@@ -537,7 +539,7 @@ export class ReportsService {
    */
   async getKpiReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     console.log("📊 [Reports] KPI - Filtros:", JSON.stringify(filters));
 
@@ -553,7 +555,7 @@ export class ReportsService {
       whereClause.datetime = {};
       if (filters.startDate) {
         whereClause.datetime.gte = new Date(
-          `${filters.startDate}T00:00:00.000Z`
+          `${filters.startDate}T00:00:00.000Z`,
         );
       }
       if (filters.endDate) {
@@ -565,7 +567,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     console.log("📊 [Reports] KPI - Where:", JSON.stringify(finalWhereClause));
@@ -576,7 +578,7 @@ export class ReportsService {
     });
 
     console.log(
-      `📊 [Reports] KPI - ${conversations.length} conversas encontradas`
+      `📊 [Reports] KPI - ${conversations.length} conversas encontradas`,
     );
 
     const tabulations = await this.prisma.tabulation.findMany();
@@ -658,7 +660,7 @@ export class ReportsService {
    */
   async getHsmReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -670,7 +672,7 @@ export class ReportsService {
       whereClause.dateTime = {};
       if (filters.startDate) {
         whereClause.dateTime.gte = new Date(
-          `${filters.startDate}T00:00:00.000Z`
+          `${filters.startDate}T00:00:00.000Z`,
         );
       }
       if (filters.endDate) {
@@ -682,7 +684,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "campaign"
+      "campaign",
     );
 
     console.log("📊 [Reports] HSM - Where:", JSON.stringify(finalWhereClause));
@@ -765,7 +767,7 @@ export class ReportsService {
    */
   async getLineStatusReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -778,11 +780,13 @@ export class ReportsService {
       whereClause.updatedAt = {};
       if (filters.startDate) {
         whereClause.updatedAt.gte = new Date(
-          `${filters.startDate}T00:00:00.000Z`
+          `${filters.startDate}T00:00:00.000Z`,
         );
       }
       if (filters.endDate) {
-        whereClause.updatedAt.lte = new Date(`${filters.endDate}T23:59:59.999Z`);
+        whereClause.updatedAt.lte = new Date(
+          `${filters.endDate}T23:59:59.999Z`,
+        );
       }
     }
 
@@ -790,12 +794,12 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "line"
+      "line",
     );
 
     console.log(
       "📊 [Reports] Status de Linha - Where:",
-      JSON.stringify(finalWhereClause)
+      JSON.stringify(finalWhereClause),
     );
 
     const lines = await this.prisma.linesStock.findMany({
@@ -804,7 +808,7 @@ export class ReportsService {
     });
 
     console.log(
-      `📊 [Reports] Status de Linha - ${lines.length} linhas encontradas`
+      `📊 [Reports] Status de Linha - ${lines.length} linhas encontradas`,
     );
 
     const segments = await this.prisma.segment.findMany();
@@ -817,7 +821,8 @@ export class ReportsService {
         Data: this.formatDate(line.updatedAt),
         Número: line.phone,
         "ID Negócio": line.businessID || "N/A",
-        "Pontuação de Qualidade": line.lineStatus === "active" ? "Ativo" : "Banido",
+        "Pontuação de Qualidade":
+          line.lineStatus === "active" ? "Ativo" : "Banido",
         Nível: "Não oficial",
         Segmento: segment?.name || "Sem segmento",
       };
@@ -857,17 +862,19 @@ export class ReportsService {
       whereClause.createdAt = {};
       if (filters.startDate) {
         whereClause.createdAt.gte = new Date(
-          `${filters.startDate}T00:00:00.000Z`
+          `${filters.startDate}T00:00:00.000Z`,
         );
       }
       if (filters.endDate) {
-        whereClause.createdAt.lte = new Date(`${filters.endDate}T23:59:59.999Z`);
+        whereClause.createdAt.lte = new Date(
+          `${filters.endDate}T23:59:59.999Z`,
+        );
       }
     }
 
     console.log(
       "📊 [Reports] Adm Linhas - Where:",
-      JSON.stringify(whereClause)
+      JSON.stringify(whereClause),
     );
 
     const lines = await this.prisma.linesStock.findMany({
@@ -875,16 +882,16 @@ export class ReportsService {
       orderBy: { createdAt: "desc" },
     });
 
-    console.log(
-      `📊 [Reports] Adm Linhas - ${lines.length} linhas encontradas`
-    );
+    console.log(`📊 [Reports] Adm Linhas - ${lines.length} linhas encontradas`);
 
     const segments = await this.prisma.segment.findMany();
     const segmentMap = new Map(segments.map((s) => [s.id, s]));
 
     const result = lines.map((line) => {
       const segment = line.segment ? segmentMap.get(line.segment) : null;
-      const firstSegment = line.firstSegmentId ? segmentMap.get(line.firstSegmentId) : null;
+      const firstSegment = line.firstSegmentId
+        ? segmentMap.get(line.firstSegmentId)
+        : null;
 
       const transferDate = line.firstTransferAt || line.updatedAt;
 
@@ -923,7 +930,7 @@ export class ReportsService {
    */
   async getEnviosReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -945,7 +952,7 @@ export class ReportsService {
     const finalCampaignWhere = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "campaign"
+      "campaign",
     );
 
     // Buscar campanhas (envios massivos)
@@ -975,7 +982,7 @@ export class ReportsService {
     const finalConversationWhere = await this.applyIdentifierFilter(
       conversationWhere,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     const conversations = await this.prisma.conversation.findMany({
@@ -1006,7 +1013,7 @@ export class ReportsService {
     const finalAllConversationsWhere = await this.applyIdentifierFilter(
       allConversationsWhere,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     const allConversations = await this.prisma.conversation.findMany({
@@ -1029,7 +1036,7 @@ export class ReportsService {
     const calculateConversationMetrics = (
       phone: string,
       lineId: number | null,
-      afterDate?: Date
+      afterDate?: Date,
     ) => {
       const key = `${phone}|${lineId || "null"}`;
       const convs = conversationsByPhoneLine.get(key) || [];
@@ -1040,10 +1047,10 @@ export class ReportsService {
         : convs;
 
       const clientMessages = relevantConvs.filter(
-        (c) => c.sender === "contact"
+        (c) => c.sender === "contact",
       ).length;
       const operatorMessages = relevantConvs.filter(
-        (c) => c.sender === "operator"
+        (c) => c.sender === "operator",
       ).length;
       const clientResponded = clientMessages > 0;
 
@@ -1070,7 +1077,7 @@ export class ReportsService {
       const metrics = calculateConversationMetrics(
         campaign.contactPhone,
         campaign.lineReceptor || null,
-        campaign.dateTime // Apenas conversas após o envio da campanha
+        campaign.dateTime, // Apenas conversas após o envio da campanha
       );
 
       result.push({
@@ -1109,13 +1116,13 @@ export class ReportsService {
     conversationGroups.forEach((convs, key) => {
       // Pegar a primeira mensagem do operador dessa conversa (primeiro envio 1:1)
       const firstOperatorMessage = convs.sort(
-        (a, b) => a.datetime.getTime() - b.datetime.getTime()
+        (a, b) => a.datetime.getTime() - b.datetime.getTime(),
       )[0];
 
       // Calcular métricas de toda a conversa (todas as mensagens relacionadas)
       const metrics = calculateConversationMetrics(
         firstOperatorMessage.contactPhone,
-        firstOperatorMessage.userLine || null
+        firstOperatorMessage.userLine || null,
         // Não passar afterDate para incluir toda a conversa relacionada
       );
 
@@ -1168,7 +1175,7 @@ export class ReportsService {
    */
   async getIndicadoresReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -1190,7 +1197,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     const conversations = await this.prisma.conversation.findMany({
@@ -1237,10 +1244,10 @@ export class ReportsService {
       const tma =
         convs.length > 1
           ? Math.round(
-            (lastConv.datetime.getTime() - firstConv.datetime.getTime()) /
-            1000 /
-            60
-          )
+              (lastConv.datetime.getTime() - firstConv.datetime.getTime()) /
+                1000 /
+                60,
+            )
           : 0;
 
       result.push({
@@ -1291,7 +1298,7 @@ export class ReportsService {
    */
   async getTemposReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -1313,7 +1320,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     const conversations = await this.prisma.conversation.findMany({
@@ -1360,7 +1367,9 @@ export class ReportsService {
 
       // Calcular tempos em minutos
       const tma = Math.round(
-        (lastConv.datetime.getTime() - firstConv.datetime.getTime()) / 1000 / 60
+        (lastConv.datetime.getTime() - firstConv.datetime.getTime()) /
+          1000 /
+          60,
       );
 
       result.push({
@@ -1397,7 +1406,7 @@ export class ReportsService {
    */
   async getTemplatesReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -1455,7 +1464,7 @@ export class ReportsService {
 
         result.push({
           "Data de Solicitação de Envio": this.formatDate(
-            firstCampaign.createdAt
+            firstCampaign.createdAt,
           ),
           Canal: line?.oficial ? "Oficial" : "Não Oficial",
           Fornecedor: "Vend",
@@ -1470,7 +1479,7 @@ export class ReportsService {
           Falha: falha ? "Sim" : "Não",
           Interação: teveRetorno ? "Sim" : "Não",
         });
-      }
+      },
     );
 
     return this.normalizeObject(result);
@@ -1484,7 +1493,7 @@ export class ReportsService {
    */
   async getCompletoCsvReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -1506,7 +1515,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     const conversations = await this.prisma.conversation.findMany({
@@ -1579,7 +1588,7 @@ export class ReportsService {
    */
   async getEquipeReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {
       sender: "operator",
@@ -1603,7 +1612,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     const conversations = await this.prisma.conversation.findMany({
@@ -1666,7 +1675,7 @@ export class ReportsService {
    */
   async getDadosTransacionadosReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -1707,7 +1716,7 @@ export class ReportsService {
       },
     });
     const userMap = new Map(
-      users.filter((u) => u.line !== null).map((u) => [u.line!, u])
+      users.filter((u) => u.line !== null).map((u) => [u.line!, u]),
     );
 
     // Buscar conversas relacionadas para verificar interação
@@ -1764,7 +1773,7 @@ export class ReportsService {
    */
   async getDetalhadoConversasReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -1786,7 +1795,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     const conversations = await this.prisma.conversation.findMany({
@@ -1834,10 +1843,10 @@ export class ReportsService {
           "CPF/CNPJ": contact?.cpf || null,
           Contrato: contact?.contract || null,
           "Data e Hora início da Conversa": `${this.formatDate(
-            firstConv.datetime
+            firstConv.datetime,
           )} ${this.formatTime(firstConv.datetime)}`,
           "Data e Hora fim da Conversa": `${this.formatDate(
-            lastConv.datetime
+            lastConv.datetime,
           )} ${this.formatTime(lastConv.datetime)}`,
           Paschoalotto: "Paschoalotto",
           "Telefone do Cliente": phone,
@@ -1870,7 +1879,7 @@ export class ReportsService {
    */
   async getLinhasReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     console.log("[Reports] getLinhasReport - Filtros recebidos:", {
       startDate: filters.startDate,
@@ -1895,7 +1904,7 @@ export class ReportsService {
 
       dateConditions.push(
         { createdAt: { gte: startDate, lte: endDate } },
-        { updatedAt: { gte: startDate, lte: endDate } }
+        { updatedAt: { gte: startDate, lte: endDate } },
       );
     }
 
@@ -1919,7 +1928,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "line"
+      "line",
     );
 
     // Buscar linhas
@@ -1928,7 +1937,9 @@ export class ReportsService {
       orderBy: { updatedAt: "asc" },
     });
 
-    console.log(`[Reports] Total de linhas candidatas (por data de atualização): ${lines.length}`);
+    console.log(
+      `[Reports] Total de linhas candidatas (por data de atualização): ${lines.length}`,
+    );
 
     // FILTRO DE "PRIMEIRA VEZ": Remover linhas que já foram alocadas antes do período
     if (filters.startDate && lines.length > 0) {
@@ -1938,16 +1949,18 @@ export class ReportsService {
       for (const line of lines) {
         // Verificar se houve eventos de alocação ANTES do início do período
         // O usuário quer ver apenas linhas que foram alocadas pela PRIMEIRA vez no período selecionado
-        const previousAllocation = await (this.prisma as any).systemEvent.findFirst({
+        const previousAllocation = await (
+          this.prisma as any
+        ).systemEvent.findFirst({
           where: {
-            type: { in: ['line_assigned', 'line_reallocated'] },
+            type: { in: ["line_assigned", "line_reallocated"] },
             createdAt: { lt: startDate },
             OR: [
               { data: { contains: `"lineId":${line.id}` } },
-              { data: { contains: `"newLineId":${line.id}` } }
-            ]
+              { data: { contains: `"newLineId":${line.id}` } },
+            ],
           },
-          select: { id: true }
+          select: { id: true },
         });
 
         // Se NÃO exite alocação anterior, inclui a linha (é a primeira vez)
@@ -1956,7 +1969,9 @@ export class ReportsService {
         }
       }
 
-      console.log(`[Reports] Linhas filtradas (removidas ${lines.length - filteredLines.length} linhas recorrentes): ${filteredLines.length}`);
+      console.log(
+        `[Reports] Linhas filtradas (removidas ${lines.length - filteredLines.length} linhas recorrentes): ${filteredLines.length}`,
+      );
       lines = filteredLines;
     }
 
@@ -1986,7 +2001,7 @@ export class ReportsService {
    */
   async getMensagensPorLinhaReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClauseCampaigns: any = {};
     const whereClauseConversations: any = {
@@ -2040,7 +2055,7 @@ export class ReportsService {
     const finalCampaignWhere = await this.applyIdentifierFilter(
       { ...whereClauseCampaigns, lineReceptor: { in: lineIds } },
       userIdentifier,
-      "campaign"
+      "campaign",
     );
 
     // Buscar campanhas (mensagens massivas) apenas das linhas filtradas
@@ -2056,7 +2071,7 @@ export class ReportsService {
     const finalConversationWhere = await this.applyIdentifierFilter(
       { ...whereClauseConversations, userLine: { in: lineIds } },
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     // Buscar conversas (mensagens individuais enviadas por operadores) apenas das linhas filtradas
@@ -2166,7 +2181,7 @@ export class ReportsService {
    */
   async getUsuariosReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {
       email: {
@@ -2185,7 +2200,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "user"
+      "user",
     );
 
     const users = await this.prisma.user.findMany({
@@ -2216,7 +2231,7 @@ export class ReportsService {
     result.sort((a, b) => {
       // Primeiro ordenar por segmento (case-insensitive)
       const segmentCompare = a.Segmento.toLowerCase().localeCompare(
-        b.Segmento.toLowerCase()
+        b.Segmento.toLowerCase(),
       );
       if (segmentCompare !== 0) {
         return segmentCompare;
@@ -2238,11 +2253,11 @@ export class ReportsService {
    */
   async getResumoAtendimentosReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     console.log(
       "📊 [Reports] Gerando Resumo Atendimentos com filtros:",
-      JSON.stringify(filters)
+      JSON.stringify(filters),
     );
 
     const whereClause: any = {};
@@ -2256,7 +2271,7 @@ export class ReportsService {
       if (filters.startDate) {
         // Adicionar hora 00:00:00 para incluir todo o dia
         whereClause.datetime.gte = new Date(
-          `${filters.startDate}T00:00:00.000Z`
+          `${filters.startDate}T00:00:00.000Z`,
         );
       }
       if (filters.endDate) {
@@ -2269,7 +2284,7 @@ export class ReportsService {
     const finalWhereClause = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "conversation"
+      "conversation",
     );
 
     console.log("📊 [Reports] Where clause:", JSON.stringify(finalWhereClause));
@@ -2341,7 +2356,7 @@ export class ReportsService {
    */
   async getHiperPersonalizadoReport(
     filters: ReportFilterDto,
-    userIdentifier?: "cliente" | "proprietario"
+    userIdentifier?: "cliente" | "proprietario",
   ) {
     const whereClause: any = {};
 
@@ -2363,7 +2378,7 @@ export class ReportsService {
     const finalCampaignWhere = await this.applyIdentifierFilter(
       whereClause,
       userIdentifier,
-      "campaign"
+      "campaign",
     );
 
     const campaigns = await this.prisma.campaign.findMany({
@@ -2389,7 +2404,7 @@ export class ReportsService {
       },
     });
     const userMap = new Map(
-      users.filter((u) => u.line !== null).map((u) => [u.line!, u])
+      users.filter((u) => u.line !== null).map((u) => [u.line!, u]),
     );
 
     const contacts = await this.prisma.contact.findMany();
@@ -2401,7 +2416,7 @@ export class ReportsService {
     const conversationWhere = await this.applyIdentifierFilter(
       { contactPhone: { in: contactPhones } },
       userIdentifier,
-      "conversation"
+      "conversation",
     );
     const conversations = await this.prisma.conversation.findMany({
       where: conversationWhere,
@@ -2466,24 +2481,54 @@ export class ReportsService {
    * Lista de tabelas permitidas para o criador de relatórios
    * IMPORTANTE: Apenas tabelas seguras e sem dados sensíveis
    */
-  private readonly ALLOWED_TABLES: Record<string, { displayName: string; description: string }> = {
-    'User': { displayName: 'Usuários', description: 'Dados de operadores e administradores' },
-    'Conversation': { displayName: 'Conversas', description: 'Histórico de atendimentos' },
-    'Contact': { displayName: 'Contatos', description: 'Clientes e leads' },
-    'LinesStock': { displayName: 'Linhas', description: 'Linhas WhatsApp' },
-    'Segment': { displayName: 'Segmentos', description: 'Segmentos de atendimento' },
-    'Tabulation': { displayName: 'Tabulações', description: 'Tipos de tabulação' },
-    'SystemEvent': { displayName: 'Eventos do Sistema', description: 'Log de eventos' },
-    'Template': { displayName: 'Templates', description: 'Templates de mensagem' },
-    'Campaign': { displayName: 'Campanhas', description: 'Campanhas de disparo' },
-    'CampaignContact': { displayName: 'Contatos de Campanhas', description: 'Contatos em campanhas' },
-    'Tag': { displayName: 'Tags', description: 'Tags de classificação' },
+  private readonly ALLOWED_TABLES: Record<
+    string,
+    { displayName: string; description: string }
+  > = {
+    User: {
+      displayName: "Usuários",
+      description: "Dados de operadores e administradores",
+    },
+    Conversation: {
+      displayName: "Conversas",
+      description: "Histórico de atendimentos",
+    },
+    Contact: { displayName: "Contatos", description: "Clientes e leads" },
+    LinesStock: { displayName: "Linhas", description: "Linhas WhatsApp" },
+    Segment: {
+      displayName: "Segmentos",
+      description: "Segmentos de atendimento",
+    },
+    Tabulation: {
+      displayName: "Tabulações",
+      description: "Tipos de tabulação",
+    },
+    SystemEvent: {
+      displayName: "Eventos do Sistema",
+      description: "Log de eventos",
+    },
+    Template: {
+      displayName: "Templates",
+      description: "Templates de mensagem",
+    },
+    Campaign: { displayName: "Campanhas", description: "Campanhas de disparo" },
+    CampaignContact: {
+      displayName: "Contatos de Campanhas",
+      description: "Contatos em campanhas",
+    },
+    Tag: { displayName: "Tags", description: "Tags de classificação" },
   };
 
   /**
    * Colunas sensíveis que NÃO devem ser expostas
    */
-  private readonly BLOCKED_COLUMNS = ['password', 'token', 'apikey', 'secret', 'key'];
+  private readonly BLOCKED_COLUMNS = [
+    "password",
+    "token",
+    "apikey",
+    "secret",
+    "key",
+  ];
 
   /**
    * Retorna lista de tabelas disponíveis para relatórios customizados
@@ -2514,15 +2559,20 @@ export class ReportsService {
       ORDER BY ordinal_position
     `;
 
-    const columns: any[] = await this.prisma.$queryRawUnsafe(schemaQuery, tableName);
+    const columns: any[] = await this.prisma.$queryRawUnsafe(
+      schemaQuery,
+      tableName,
+    );
 
     // Filtrar colunas bloqueadas
     return columns
-      .filter(col => !this.BLOCKED_COLUMNS.includes(col.column_name.toLowerCase()))
-      .map(col => ({
+      .filter(
+        (col) => !this.BLOCKED_COLUMNS.includes(col.column_name.toLowerCase()),
+      )
+      .map((col) => ({
         name: col.column_name,
         type: col.data_type,
-        nullable: col.is_nullable === 'YES',
+        nullable: col.is_nullable === "YES",
       }));
   }
 
@@ -2543,16 +2593,16 @@ export class ReportsService {
 
     // 2. Buscar colunas válidas da tabela
     const validColumns = await this.getTableColumns(tableName);
-    const columnNames = validColumns.map(c => c.name);
+    const columnNames = validColumns.map((c) => c.name);
 
     // 3. Validar colunas solicitadas
-    const safeColumns = columns.filter(col => columnNames.includes(col));
+    const safeColumns = columns.filter((col) => columnNames.includes(col));
     if (safeColumns.length === 0) {
-      throw new Error('Nenhuma coluna válida selecionada');
+      throw new Error("Nenhuma coluna válida selecionada");
     }
 
     // 4. Construir SELECT seguro (usando aspas duplas para nomes de colunas)
-    const selectClause = safeColumns.map(c => `"${c}"`).join(', ');
+    const selectClause = safeColumns.map((c) => `"${c}"`).join(", ");
 
     // 5. Construir WHERE com parâmetros
     const whereConditions: string[] = [];
@@ -2566,21 +2616,39 @@ export class ReportsService {
       }
 
       // Validar operador
-      const allowedOperators = ['=', '!=', '>', '<', '>=', '<=', 'LIKE', 'ILIKE', 'IS NULL', 'IS NOT NULL'];
+      const allowedOperators = [
+        "=",
+        "!=",
+        ">",
+        "<",
+        ">=",
+        "<=",
+        "LIKE",
+        "ILIKE",
+        "IS NULL",
+        "IS NOT NULL",
+      ];
       if (!allowedOperators.includes(filter.operator.toUpperCase())) {
         continue;
       }
 
-      if (filter.operator.toUpperCase() === 'IS NULL') {
+      if (filter.operator.toUpperCase() === "IS NULL") {
         whereConditions.push(`"${filter.column}" IS NULL`);
-      } else if (filter.operator.toUpperCase() === 'IS NOT NULL') {
+      } else if (filter.operator.toUpperCase() === "IS NOT NULL") {
         whereConditions.push(`"${filter.column}" IS NOT NULL`);
-      } else if (filter.operator.toUpperCase() === 'LIKE' || filter.operator.toUpperCase() === 'ILIKE') {
-        whereConditions.push(`"${filter.column}" ${filter.operator.toUpperCase()} $${paramIndex}`);
+      } else if (
+        filter.operator.toUpperCase() === "LIKE" ||
+        filter.operator.toUpperCase() === "ILIKE"
+      ) {
+        whereConditions.push(
+          `"${filter.column}" ${filter.operator.toUpperCase()} $${paramIndex}`,
+        );
         params.push(`%${filter.value}%`);
         paramIndex++;
       } else {
-        whereConditions.push(`"${filter.column}" ${filter.operator} $${paramIndex}`);
+        whereConditions.push(
+          `"${filter.column}" ${filter.operator} $${paramIndex}`,
+        );
         params.push(filter.value);
         paramIndex++;
       }
@@ -2589,7 +2657,7 @@ export class ReportsService {
     // 6. Construir query final
     let query = `SELECT ${selectClause} FROM "${tableName}"`;
     if (whereConditions.length > 0) {
-      query += ` WHERE ${whereConditions.join(' AND ')}`;
+      query += ` WHERE ${whereConditions.join(" AND ")}`;
     }
     query += ` LIMIT ${Math.min(limit, 10000)}`; // Máximo de 10000 registros
 
@@ -2600,7 +2668,7 @@ export class ReportsService {
     const results: any[] = await this.prisma.$queryRawUnsafe(query, ...params);
 
     // 8. Formatar datas
-    const formattedResults = results.map(row => {
+    const formattedResults = results.map((row) => {
       const formatted: any = {};
       for (const [key, value] of Object.entries(row)) {
         if (value instanceof Date) {
@@ -2613,7 +2681,7 @@ export class ReportsService {
     });
 
     return {
-      query: query.replace(/\$\d+/g, '?'), // Ocultar parâmetros no retorno
+      query: query.replace(/\$\d+/g, "?"), // Ocultar parâmetros no retorno
       totalRows: formattedResults.length,
       data: formattedResults,
     };
@@ -2623,7 +2691,10 @@ export class ReportsService {
    * Relatório: Mensagens por Operador
    * Retorna contagem de mensagens enviadas e recebidas por operador
    */
-  async getMessagesPerOperatorReport(filters: ReportFilterDto, userIdentifier?: "cliente" | "proprietario") {
+  async getMessagesPerOperatorReport(
+    filters: ReportFilterDto,
+    userIdentifier?: "cliente" | "proprietario",
+  ) {
     // 1. Construir cláusula WHERE base
     const whereClause: any = {
       datetime: {
@@ -2639,7 +2710,7 @@ export class ReportsService {
       whereClause.segment = filters.segment;
     }
 
-    this.applyIdentifierFilter(whereClause, userIdentifier, 'conversation');
+    this.applyIdentifierFilter(whereClause, userIdentifier, "conversation");
 
     // 3. Buscar TODAS as mensagens (Conversations) no período
     // Solicitado: Uma linha por mensagem
@@ -2654,12 +2725,20 @@ export class ReportsService {
         messageType: true, // Opcional, mas útil para contexto se precisar
         message: true,
       },
-      orderBy: { datetime: 'desc' }
+      orderBy: { datetime: "desc" },
     });
 
     // 4. Buscar detalhes dos operadores e das linhas
-    const operatorIds = [...new Set(conversations.map(s => s.userId).filter(id => id !== null))] as number[];
-    const lineIds = [...new Set(conversations.map(s => s.userLine).filter(id => id !== null))] as number[];
+    const operatorIds = [
+      ...new Set(
+        conversations.map((s) => s.userId).filter((id) => id !== null),
+      ),
+    ] as number[];
+    const lineIds = [
+      ...new Set(
+        conversations.map((s) => s.userLine).filter((id) => id !== null),
+      ),
+    ] as number[];
 
     const operators = await this.prisma.user.findMany({
       where: { id: { in: operatorIds } },
@@ -2667,7 +2746,7 @@ export class ReportsService {
         id: true,
         name: true,
         email: true,
-        segment: true
+        segment: true,
       },
     });
 
@@ -2676,38 +2755,44 @@ export class ReportsService {
       select: {
         id: true,
         phone: true,
-        evolutionName: true
-      }
+        evolutionName: true,
+      },
     });
 
     const segments = await this.prisma.segment.findMany();
-    const segmentMap = new Map(segments.map(s => [s.id, s.name]));
-    const operatorMap = new Map(operators.map(u => [u.id, u]));
-    const lineMap = new Map(lines.map(l => [l.id, l]));
+    const segmentMap = new Map(segments.map((s) => [s.id, s.name]));
+    const operatorMap = new Map(operators.map((u) => [u.id, u]));
+    const lineMap = new Map(lines.map((l) => [l.id, l]));
 
     // 5. Transformar em dados planos
     // Colunas Solicitadas: Operador, Email, Segmento, Linha, Tipo(recebeu/enviou), Data
-    const formattedResults = conversations.map(conv => {
+    const formattedResults = conversations.map((conv) => {
       const op = operatorMap.get(conv.userId!);
       const line = conv.userLine ? lineMap.get(conv.userLine) : null;
-      const segmentName = op?.segment ? segmentMap.get(op.segment) : 'Sem Segmento';
+      const segmentName = op?.segment
+        ? segmentMap.get(op.segment)
+        : "Sem Segmento";
 
       // Formatar Data (DD/MM/YYYY)
       const dateObj = new Date(conv.datetime);
-      const dateStr = dateObj.toLocaleDateString('pt-BR');
+      const dateStr = dateObj.toLocaleDateString("pt-BR");
 
       // Traduzir Tipo
-      const type = conv.sender === 'operator' ? 'Enviou' : 'Recebeu';
+      const type = conv.sender === "operator" ? "Enviou" : "Recebeu";
 
       return {
-        "Operador": op?.name || `ID ${conv.userId}`,
-        "Email": op?.email || '',
-        "Segmento": segmentName,
-        "Linha Utilizada": line ? `${line.phone} (${line.evolutionName})` : (conv.userLine ? `Linha ID ${conv.userLine}` : 'N/A'),
-        "Tipo": type,
-        "Data": dateStr,
-        "Hora": dateObj.toLocaleTimeString('pt-BR'),
-        "Conteúdo": (conv.message || '').replace(/[\r\n]+/g, ' ')
+        Operador: op?.name || `ID ${conv.userId}`,
+        Email: op?.email || "",
+        Segmento: segmentName,
+        "Linha Utilizada": line
+          ? `${line.phone} (${line.evolutionName})`
+          : conv.userLine
+            ? `Linha ID ${conv.userLine}`
+            : "N/A",
+        Tipo: type,
+        Data: dateStr,
+        Hora: dateObj.toLocaleTimeString("pt-BR"),
+        Conteúdo: (conv.message || "").replace(/[\r\n]+/g, " "),
       };
     });
 
@@ -2724,7 +2809,7 @@ export class ReportsService {
         gte: new Date(`${filters.startDate}T00:00:00`),
         lte: new Date(`${filters.endDate}T23:59:59.999`),
       },
-      createdBy: { not: null } // Apenas linhas com criador registrado
+      createdBy: { not: null }, // Apenas linhas com criador registrado
     };
 
     if (filters.segment) {
@@ -2735,24 +2820,29 @@ export class ReportsService {
       where: whereClause,
       include: {
         creator: {
-          select: { name: true, email: true }
-        }
+          select: { name: true, email: true },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: "desc" },
     });
 
     const segments = await this.prisma.segment.findMany();
-    const segmentMap = new Map(segments.map(s => [s.id, s.name]));
+    const segmentMap = new Map(segments.map((s) => [s.id, s.name]));
 
-    return lines.map(line => {
-      const segmentName = line.segment ? segmentMap.get(line.segment) : 'Sem Segmento';
+    return lines.map((line) => {
+      const segmentName = line.segment
+        ? segmentMap.get(line.segment)
+        : "Sem Segmento";
 
       return {
-        "Ativador": line.creator?.name || 'Desconhecido',
-        "Linha": line.phone,
-        "Segmento": segmentName,
-        "Data de Criação": new Date(line.createdAt).toLocaleDateString('pt-BR') + ' ' + new Date(line.createdAt).toLocaleTimeString('pt-BR'),
-        "Status": line.lineStatus
+        Ativador: line.creator?.name || "Desconhecido",
+        Linha: line.phone,
+        Segmento: segmentName,
+        "Data de Criação":
+          new Date(line.createdAt).toLocaleDateString("pt-BR") +
+          " " +
+          new Date(line.createdAt).toLocaleTimeString("pt-BR"),
+        Status: line.lineStatus,
       };
     });
   }
