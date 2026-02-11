@@ -1871,11 +1871,8 @@ export class ReportsService {
    * - Blindado (sim/não - baseado em lineStatus 'ban')
    * - Data de Transferência (data da última movimentação)
    *
-   * Opções:
-   * - onlyMovimentedLines = false/undefined: Todas as linhas
-   * - onlyMovimentedLines = true: Apenas linhas movimentadas (com conversas/campanhas no período)
-   *
-   * IMPORTANTE: Traz TODAS as linhas (incluindo segmento "Padrão") para que o total bata com o esperado
+   * Só entram linhas que já possuem firstTransferAt (já foram transferidas).
+   * Filtro de data: baseado em firstTransferAt (quando informado).
    */
   async getLinhasReport(
     filters: ReportFilterDto,
@@ -1892,26 +1889,13 @@ export class ReportsService {
       where: { name: "Padrão" },
     });
 
-    // Preparar filtro de datas (createdAt OR updatedAt)
-    const dateConditions: any[] = [];
-    if (filters.startDate || filters.endDate) {
-      const startDate = filters.startDate
-        ? new Date(`${filters.startDate}T00:00:00.000Z`)
-        : new Date("2000-01-01");
-      const endDate = filters.endDate
-        ? new Date(`${filters.endDate}T23:59:59.999Z`)
-        : new Date("2100-01-01");
-
-      dateConditions.push(
-        { createdAt: { gte: startDate, lte: endDate } },
-        { updatedAt: { gte: startDate, lte: endDate } },
-      );
-    }
-
-    // Construir whereClause
+    // Apenas linhas que já possuem firstTransferAt (já foram transferidas)
+    // Filtro de data: firstTransferAt dentro do período selecionado
     const whereClause: any = {
       // Excluir segmento "Padrão"
       ...(padraoSegment && { segment: { not: padraoSegment.id } }),
+      // Linhas sem firstTransferAt não aparecem no relatório
+      firstTransferAt: { not: null },
     };
 
     // Se houver filtro de segmento específico, usar esse
@@ -1919,9 +1903,19 @@ export class ReportsService {
       whereClause.segment = filters.segment;
     }
 
-    // Adicionar filtro de datas (OR entre createdAt e updatedAt)
-    if (dateConditions.length > 0) {
-      whereClause.OR = dateConditions;
+    // Filtro de datas: firstTransferAt no período
+    if (filters.startDate || filters.endDate) {
+      const startDate = filters.startDate
+        ? new Date(`${filters.startDate}T00:00:00.000Z`)
+        : new Date("2000-01-01");
+      const endDate = filters.endDate
+        ? new Date(`${filters.endDate}T23:59:59.999Z`)
+        : new Date("2100-01-01");
+      whereClause.firstTransferAt = {
+        ...whereClause.firstTransferAt,
+        gte: startDate,
+        lte: endDate,
+      };
     }
 
     // Aplicar filtro de identificador (cliente/proprietário)
@@ -1986,7 +1980,7 @@ export class ReportsService {
         Carteira: this.normalizeText(segmentName) || "Sem segmento",
         Número: line.phone,
         Blindado: line.lineStatus === "ban" ? "Sim" : "Não",
-        "Data de Transferência": this.formatDateTime(line.updatedAt),
+        "Data de Transferência": this.formatDateTime(line.firstTransferAt),
       };
     });
 
