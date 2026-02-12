@@ -187,6 +187,7 @@ export interface Segment {
   allowsFreeMessage: boolean;
   identifier?: 'cliente' | 'proprietario';
   maxOperatorsPerLine?: number;
+  allocationEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }

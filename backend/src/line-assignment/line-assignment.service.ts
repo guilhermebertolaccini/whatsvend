@@ -153,8 +153,18 @@ export class LineAssignmentService {
 
       // Buscar configs dos segmentos
       let userSegmentConfig = null;
-      if (userSegment) {
+      if (userSegmentConfig) {
         userSegmentConfig = await this.prisma.segment.findUnique({ where: { id: userSegment } });
+
+        // VERIFICAR SE ALOCAÇÃO ESTÁ HABILITADA
+        if (userSegmentConfig && userSegmentConfig.allocationEnabled === false) {
+          this.logger.warn(
+            `Alocação pausada para o segmento ${userSegmentConfig.name}`,
+            'LineAssignment',
+            { userId, userSegment, traceId },
+          );
+          return { success: false, reason: 'Alocação pausada para este segmento' };
+        }
       }
 
       // Buscar segmento "Padrão"

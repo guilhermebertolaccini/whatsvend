@@ -18,4 +18,8 @@ export class CreateSegmentDto {
   @IsOptional()
   @Min(1)
   maxOperatorsPerLine?: number; // Máximo de operadores por linha neste segmento
+
+  @IsBoolean()
+  @IsOptional()
+  allocationEnabled?: boolean;
 }

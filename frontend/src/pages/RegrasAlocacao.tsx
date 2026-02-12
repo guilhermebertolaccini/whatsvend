@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { segmentsService, type Segment } from "@/services/api";
 import { Settings, Users, Save, Loader2 } from "lucide-react";
@@ -84,6 +85,39 @@ export default function RegrasAlocacao() {
         }
     };
 
+    const handleToggleAllocation = async (segmentId: number, currentStatus: boolean) => {
+        try {
+            // Optimistic update
+            setSegments(prev => prev.map(s =>
+                s.id === segmentId
+                    ? { ...s, allocationEnabled: !currentStatus }
+                    : s
+            ));
+
+            await segmentsService.update(segmentId, { allocationEnabled: !currentStatus });
+
+            toast({
+                title: !currentStatus ? "Alocação ativada" : "Alocação pausada",
+                description: !currentStatus
+                    ? "Novas linhas poderão ser atribuídas a este segmento."
+                    : "Nenhuma nova linha será atribuída a este segmento.",
+            });
+        } catch (error) {
+            console.error('Error toggling allocation:', error);
+            // Revert on error
+            setSegments(prev => prev.map(s =>
+                s.id === segmentId
+                    ? { ...s, allocationEnabled: currentStatus }
+                    : s
+            ));
+            toast({
+                title: "Erro ao atualizar",
+                description: "Não foi possível alterar o status da alocação",
+                variant: "destructive"
+            });
+        }
+    };
+
     if (isLoading) {
         return (
             <MainLayout>
@@ -121,6 +155,7 @@ export default function RegrasAlocacao() {
                                                 Máx. Operadores/Linha
                                             </div>
                                         </TableHead>
+                                        <TableHead className="text-center">Alocação</TableHead>
                                         <TableHead className="text-center">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -146,6 +181,17 @@ export default function RegrasAlocacao() {
                                                         {segment.maxOperatorsPerLine ?? 2}
                                                     </span>
                                                 )}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Switch
+                                                        checked={segment.allocationEnabled !== false}
+                                                        onCheckedChange={() => handleToggleAllocation(segment.id, segment.allocationEnabled !== false)}
+                                                    />
+                                                    <span className="text-xs text-muted-foreground w-12 text-left">
+                                                        {segment.allocationEnabled !== false ? 'Ativa' : 'Pausada'}
+                                                    </span>
+                                                </div>
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 {editingId === segment.id ? (
