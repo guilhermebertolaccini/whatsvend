@@ -6,7 +6,7 @@ import axios from 'axios';
 
 @Injectable()
 export class EvolutionService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(createEvolutionDto: CreateEvolutionDto) {
     const existing = await this.prisma.evolution.findUnique({
@@ -78,7 +78,7 @@ export class EvolutionService {
 
   async testConnection(evolutionName: string) {
     const evolution = await this.findByName(evolutionName);
-    
+
     if (!evolution) {
       throw new NotFoundException('Evolution não encontrada');
     }
@@ -97,6 +97,50 @@ export class EvolutionService {
       };
     } catch (error) {
       throw new Error(`Erro ao conectar: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  async getBase64FromMediaMessage(
+    evolutionName: string,
+    instanceName: string,
+    messageData: any,
+    convertToMp4: boolean = false,
+  ) {
+    const evolution = await this.findByName(evolutionName);
+
+    if (!evolution) {
+      console.warn(`Evolution instance '${evolutionName}' not found`);
+      return null;
+    }
+
+    try {
+      const payload = {
+        message: messageData,
+        convertToMp4,
+      };
+
+      const response = await axios.post(
+        `${evolution.evolutionUrl}/chat/getBase64FromMediaMessage/${instanceName}`,
+        payload,
+        {
+          headers: {
+            apikey: evolution.evolutionKey,
+          },
+        },
+      );
+
+      if (response.data && response.data.base64) {
+        return {
+          data: response.data.base64,
+          mimetype: response.data.mimetype,
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error(
+        `Erro ao buscar Base64 da mídia: ${error.response?.data?.message || error.message}`,
+      );
+      return null;
     }
   }
 }

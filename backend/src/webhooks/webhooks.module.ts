@@ -11,6 +11,8 @@ import { BlocklistModule } from '../blocklist/blocklist.module';
 import { TabulationsModule } from '../tabulations/tabulations.module';
 import { SystemEventsModule } from '../system-events/system-events.module';
 
+import { EvolutionModule } from '../evolution/evolution.module';
+
 @Module({
   imports: [
     ConversationsModule,
@@ -21,8 +23,9 @@ import { SystemEventsModule } from '../system-events/system-events.module';
     BlocklistModule,
     TabulationsModule,
     SystemEventsModule,
+    EvolutionModule,
   ],
   controllers: [WebhooksController],
   providers: [WebhooksService, PrismaService],
 })
-export class WebhooksModule {}
+export class WebhooksModule { }

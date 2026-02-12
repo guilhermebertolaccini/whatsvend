@@ -11,6 +11,8 @@ import { SystemEventsService, EventType, EventModule, EventSeverity } from '../s
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+import { EvolutionService } from '../evolution/evolution.service';
+
 @Injectable()
 export class WebhooksService {
   private readonly uploadsDir = './uploads';
@@ -24,6 +26,7 @@ export class WebhooksService {
     private controlPanelService: ControlPanelService,
     private blocklistService: BlocklistService,
     private systemEventsService: SystemEventsService,
+    private evolutionService: EvolutionService,
   ) { }
 
   async handleEvolutionMessage(data: any) {
@@ -135,10 +138,37 @@ export class WebhooksService {
         // Processar mídia base64 se a linha tiver receiveMedia ativado
         if (line.receiveMedia && messageType !== 'text') {
           console.log('🔍 [Webhook] Tentando extrair mídia Base64...');
-          const base64Media = this.extractBase64Media(message.message);
+          let base64Media = this.extractBase64Media(message.message);
+
+          // Se não encontrou base64 no payload, tentar buscar via API
+          if (!base64Media) {
+            console.log('⚠️ [Webhook] Base64 não encontrado no payload, tentando buscar via API...');
+            const convertToMp4 = messageType === 'audio'; // Converter áudio para MP4 se necessário (usualmente true para compatibilidade)
+
+            try {
+              // É necessário passar o objeto message completo (que contem key, message, etc) ou apenas key?
+              // O método espera messageData. O endpoint da Evolution geralmente aceita o objeto da mensagem ou a key.
+              // O payload que o usuário passou tem { message: { key: ... } }.
+              // A variável 'message' aqui JÁ È o objeto que contem 'key'.
+              // Então passamos 'message' como 'messageData'.
+              const apiResponse = await this.evolutionService.getBase64FromMediaMessage(
+                line.evolutionName,
+                instanceName,
+                message, // Passando o objeto mensagem completo
+                convertToMp4,
+              );
+
+              if (apiResponse) {
+                console.log('✅ [Webhook] Base64 recuperado via API com sucesso');
+                base64Media = apiResponse;
+              }
+            } catch (error) {
+              console.error('❌ [Webhook] Erro ao buscar Base64 via API:', error.message);
+            }
+          }
 
           if (base64Media) {
-            console.log('✅ [Webhook] Base64 encontrado, mimetype:', base64Media.mimetype);
+            console.log('✅ [Webhook] Base64 encontrado/recuperado, mimetype:', base64Media.mimetype);
             try {
               const fileName = `${Date.now()}-${from}-${messageType}.${this.getExtension(messageType, base64Media.mimetype)}`;
               const localFileName = await this.saveBase64Media(base64Media.data, fileName, base64Media.mimetype);
@@ -151,7 +181,7 @@ export class WebhooksService {
               console.error('❌ Erro ao salvar mídia Base64:', error.message);
             }
           } else {
-            console.log('⚠️ [Webhook] Base64 não encontrado, tentando baixar da URL...');
+            console.log('⚠️ [Webhook] Base64 não encontrado nem via API, tentando baixar da URL...');
             if (mediaUrl) {
               // Fallback: baixar da URL se não tiver base64
               try {
