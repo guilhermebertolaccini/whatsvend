@@ -324,14 +324,23 @@ export class OperatorQueueService {
       });
 
       // Buscar configuração de todos os segmentos
+      // Buscar configuração de todos os segmentos
       const segments = await this.prisma.segment.findMany({
-        select: { id: true, maxOperatorsPerLine: true },
+        select: { id: true, maxOperatorsPerLine: true, allocationEnabled: true },
       });
-      const segmentMaxMap = new Map(segments.map(s => [s.id, s.maxOperatorsPerLine]));
+      const segmentMap = new Map(segments.map(s => [s.id, s]));
 
       const linesToAssign = availableLines.filter(line => {
+        // Verificar se alocação está habilitada para este segmento
+        if (line.segment) {
+          const segmentConfig = segmentMap.get(line.segment);
+          if (segmentConfig && segmentConfig.allocationEnabled === false) {
+            return false;
+          }
+        }
+
         // Usar maxOperatorsPerLine do segmento, ou 2 como padrão
-        const segmentMax = line.segment ? segmentMaxMap.get(line.segment) : 2;
+        const segmentMax = line.segment ? segmentMap.get(line.segment)?.maxOperatorsPerLine : 2;
         const maxOperators = line.isReserve ? 1 : (segmentMax ?? 2);
         return line.operators.length < maxOperators;
       });
