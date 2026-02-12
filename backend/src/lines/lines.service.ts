@@ -82,11 +82,27 @@ export class LinesService {
       const instanceName = `line_${createLineDto.phone.replace(/\D/g, '')}`;
       const webhookUrl = `${process.env.APP_URL || 'http://localhost:3000'}/webhooks/evolution`;
 
+      // webhook_base64 = true para receber mídia (imagens, áudios, docs) em base64
+      const enableBase64 = createLineDto.receiveMedia === true;
+
       const requestData = {
         instanceName,
         qrcode: true,
         integration: 'WHATSAPP-BAILEYS',
         syncFullHistory: true, // Sincronizar histórico completo ao conectar
+        webhook: {
+          enabled: true,
+          url: webhookUrl,
+          byEvents: false,
+          base64: enableBase64,
+          events: [
+            'MESSAGES_UPSERT',
+            'MESSAGES_UPDATE',
+            'SEND_MESSAGE',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED',
+          ],
+        },
       };
 
       console.log('📡 Criando instância na Evolution:', {
@@ -117,7 +133,7 @@ export class LinesService {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // webhook_base64 = true para receber mídia (imagens, áudios, docs) em base64
-      const enableBase64 = createLineDto.receiveMedia === true;
+      // const enableBase64 = createLineDto.receiveMedia === true; // Já definido acima
 
       try {
         const webhookData = {
